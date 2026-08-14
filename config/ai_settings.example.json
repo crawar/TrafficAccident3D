@@ -1,0 +1,11 @@
+{
+  "deepseekApiKey": "",
+  "enableLiabilityAnalysis": false,
+  "regenerateLiabilityEachTime": true,
+  "requestUrl": "https://api.deepseek.com/chat/completions",
+  "model": "deepseek-v4-pro",
+  "reasoningEffort": "high",
+  "thinkingMode": "enabled",
+  "temperature": 0.1,
+  "requestTimeoutSec": 120
+}

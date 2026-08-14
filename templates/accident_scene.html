@@ -1,0 +1,2983 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>交通事故 3D 建模场景复盘</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: sans-serif; }
+        .measure-control {
+            position: absolute;
+            right: 20px;
+            width: 120px;
+            padding: 10px 20px;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            z-index: 100;
+            text-align: center;
+            transition: background-color 0.15s ease, opacity 0.15s ease;
+        }
+        .measure-control:disabled {
+            background-color: #8b8b8b !important;
+            cursor: not-allowed;
+            opacity: 0.8;
+        }
+        #measure-btn {
+            top: 20px;
+            background-color: #28a745;
+        }
+        #delete-measure-btn {
+            top: 70px;
+            background-color: #6c757d;
+        }
+        #reset-view-btn {
+            top: 120px;
+            background-color: #17a2b8;
+        }
+        #save-measure-btn {
+            top: 170px;
+            background-color: #007bff;
+        }
+        #measure-status {
+            position: absolute;
+            left: 20px;
+            bottom: 20px;
+            padding: 10px 15px;
+            background-color: rgba(0,0,0,0.8);
+            color: #ffffff;
+            border-radius: 5px;
+            z-index: 100;
+            font-size: 13px;
+            max-width: 240px;
+        }
+        #orthogonal-lock-toggle,
+        #magnetic-snap-toggle,
+        #vehicle-id-toggle {
+            position: absolute;
+            right: 20px;
+            width: 120px;
+            box-sizing: border-box;
+            padding: 8px 10px;
+            background-color: rgba(0,0,0,0.8);
+            color: #ffffff;
+            border-radius: 5px;
+            z-index: 100;
+            font-size: 13px;
+            cursor: pointer;
+            user-select: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+        #vehicle-id-toggle {
+            bottom: 20px;
+        }
+        #orthogonal-lock-toggle {
+            bottom: 64px;
+        }
+        #magnetic-snap-toggle {
+            bottom: 108px;
+        }
+        #orthogonal-lock-checkbox,
+        #magnetic-snap-checkbox,
+        #vehicle-id-checkbox {
+            cursor: pointer;
+            width: 16px;
+            height: 16px;
+            margin: 0;
+        }
+        .liability-control {
+            position: absolute;
+            right: 20px;
+            width: 120px;
+            padding: 10px 20px;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            z-index: 110;
+            text-align: center;
+            transition: background-color 0.15s ease, opacity 0.15s ease;
+        }
+        .liability-control:disabled {
+            background-color: #8b8b8b !important;
+            cursor: not-allowed;
+            opacity: 0.8;
+        }
+        #liability-btn {
+            bottom: 154px;
+            background-color: #d94841;
+        }
+        #report-btn {
+            bottom: 204px;
+            background-color: #7b4ce2;
+        }
+        #motion-btn {
+            bottom: 254px;
+            background-color: #0d9488;
+        }
+        #motion-bar {
+            position: fixed;
+            left: 50%;
+            bottom: 28px;
+            transform: translateX(-50%);
+            z-index: 280;
+            display: none;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 14px;
+            border-radius: 28px;
+            background: rgba(18, 24, 32, 0.88);
+            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+            min-width: min(720px, calc(100vw - 40px));
+            box-sizing: border-box;
+        }
+        #motion-bar.is-visible {
+            display: flex;
+        }
+        .motion-round-btn {
+            width: 42px;
+            height: 42px;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            color: #ffffff;
+            background: #2f6fed;
+            font-size: 13px;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 auto;
+            padding: 0;
+            line-height: 1;
+        }
+        .motion-round-btn:disabled {
+            background: #8b8b8b !important;
+            cursor: not-allowed;
+            opacity: 0.8;
+        }
+        #motion-play-btn {
+            font-size: 16px;
+        }
+        #motion-progress {
+            flex: 1 1 auto;
+            height: 8px;
+            accent-color: #4ea1ff;
+            cursor: pointer;
+        }
+        #motion-speed-btn {
+            background: #445566;
+            min-width: 42px;
+        }
+        #liability-card {
+            position: fixed;
+            min-width: 220px;
+            max-width: 260px;
+            min-height: 180px;
+            padding: 14px 16px;
+            border-radius: 12px;
+            background: rgba(14, 25, 39, 0.92);
+            color: #ffffff;
+            box-shadow: 0 12px 34px rgba(0, 0, 0, 0.32);
+            z-index: 260;
+            pointer-events: none;
+            display: none;
+            line-height: 1.55;
+            font-size: 13px;
+            white-space: pre-wrap;
+        }
+        #liability-card.is-visible {
+            display: block;
+        }
+        #report-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.55);
+            z-index: 320;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        #report-modal.is-visible {
+            display: flex;
+        }
+        #report-modal-card {
+            width: min(860px, 100%);
+            max-height: 86vh;
+            overflow: auto;
+            border-radius: 16px;
+            background: #ffffff;
+            color: #222222;
+            box-shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
+        }
+        #report-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 18px 10px;
+            border-bottom: 1px solid #ececec;
+            font-weight: 700;
+            font-size: 18px;
+        }
+        #report-close-btn {
+            border: none;
+            border-radius: 8px;
+            background: #efefef;
+            color: #222222;
+            cursor: pointer;
+            padding: 6px 10px;
+        }
+        #report-modal-body {
+            padding: 14px 18px 20px;
+        }
+        #report-modal-body pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-break: break-word;
+            font-size: 13px;
+            line-height: 1.55;
+            color: #222222;
+        }
+        #report-expert-list {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+        .report-expert-card {
+            display: grid;
+            grid-template-columns: 56px 1fr;
+            gap: 12px;
+            align-items: start;
+            padding: 12px;
+            border: 1px solid #ececec;
+            border-radius: 12px;
+            background: #fafafa;
+        }
+        .report-expert-avatar {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            object-fit: cover;
+            background: #e8e8e8;
+            border: 1px solid #ddd;
+        }
+        .report-expert-name {
+            font-weight: 700;
+            font-size: 15px;
+            margin-bottom: 6px;
+            color: #1f1f1f;
+        }
+        .report-expert-speech {
+            margin: 0;
+            white-space: pre-wrap;
+            word-break: break-word;
+            font-size: 13px;
+            line-height: 1.6;
+            color: #333333;
+        }
+        .report-expert-empty {
+            color: #666666;
+            font-size: 13px;
+            line-height: 1.55;
+        }
+        #pan-control-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 120;
+            display: grid;
+            grid-template-columns: repeat(3, 38px);
+            grid-template-rows: repeat(3, 38px);
+            gap: 6px;
+            padding: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.35);
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.18);
+            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            user-select: none;
+        }
+        .pan-control-button {
+            width: 38px;
+            height: 38px;
+            border: 1px solid rgba(255, 255, 255, 0.42);
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.32);
+            color: rgba(20, 28, 36, 0.9);
+            box-shadow: 0 5px 12px rgba(0, 0, 0, 0.16), inset 0 1px 1px rgba(255, 255, 255, 0.45);
+            cursor: pointer;
+            font-size: 18px;
+            font-weight: 700;
+            line-height: 1;
+            touch-action: none;
+            transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+        }
+        .pan-control-button:hover {
+            background: rgba(255, 255, 255, 0.44);
+        }
+        .pan-control-button:active,
+        .pan-control-button.is-pressed {
+            transform: translateY(2px) scale(0.96);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18), inset 0 3px 8px rgba(0, 0, 0, 0.18);
+        }
+        .pan-up {
+            grid-column: 2;
+            grid-row: 1;
+        }
+        .pan-left {
+            grid-column: 1;
+            grid-row: 2;
+        }
+        .pan-speed-button {
+            grid-column: 2;
+            grid-row: 2;
+            border-radius: 50%;
+            font-size: 14px;
+            color: #ffffff;
+            background: rgba(24, 144, 255, 0.68);
+            box-shadow: 0 6px 14px rgba(24, 144, 255, 0.28), inset 0 1px 1px rgba(255, 255, 255, 0.42);
+        }
+        .pan-speed-button:hover {
+            background: rgba(24, 144, 255, 0.82);
+        }
+        .pan-speed-button.is-bouncing {
+            animation: speedButtonPop 0.22s ease;
+        }
+        .pan-right {
+            grid-column: 3;
+            grid-row: 2;
+        }
+        .pan-down {
+            grid-column: 2;
+            grid-row: 3;
+        }
+        @keyframes speedButtonPop {
+            0% { transform: translateY(0) scale(1); }
+            45% { transform: translateY(2px) scale(0.9); }
+            100% { transform: translateY(0) scale(1.04); }
+        }
+        #intro-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(10, 18, 28, 0.28);
+            backdrop-filter: blur(14px) saturate(1.18);
+            -webkit-backdrop-filter: blur(14px) saturate(1.18);
+            transition: opacity 0.55s ease, visibility 0.55s ease;
+        }
+        #intro-overlay.is-hidden {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+        #intro-card {
+            min-width: 260px;
+            padding: 34px 46px;
+            border: 1px solid rgba(255, 255, 255, 0.46);
+            border-radius: 28px;
+            background: linear-gradient(145deg, rgba(255, 255, 255, 0.92), rgba(232, 241, 255, 0.78));
+            box-shadow: 0 28px 80px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.78);
+            color: #142235;
+            cursor: pointer;
+            text-align: center;
+            user-select: none;
+            transform: translateY(0);
+            animation: introCardPulse 2.4s ease-in-out infinite;
+        }
+        #intro-card-title {
+            display: block;
+            font-size: 34px;
+            font-weight: 800;
+            letter-spacing: 0.18em;
+            text-indent: 0.18em;
+        }
+        #intro-card-hint {
+            display: block;
+            margin-top: 12px;
+            color: rgba(20, 34, 53, 0.62);
+            font-size: 14px;
+            letter-spacing: 0.08em;
+        }
+        #intro-card:hover {
+            transform: translateY(-3px) scale(1.02);
+        }
+        @keyframes introCardPulse {
+            0%, 100% { box-shadow: 0 28px 80px rgba(0, 0, 0, 0.32), 0 0 0 rgba(80, 154, 255, 0), inset 0 1px 0 rgba(255, 255, 255, 0.78); }
+            50% { box-shadow: 0 30px 90px rgba(0, 0, 0, 0.36), 0 0 42px rgba(80, 154, 255, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.82); }
+        }
+    </style>
+</head>
+<body>
+    <div id="intro-overlay" role="button" tabindex="0" aria-label="开始建模">
+        <div id="intro-card">
+            <span id="intro-card-title">开始建模</span>
+            <span id="intro-card-hint">点击启动 3D 事故现场生成</span>
+        </div>
+    </div>
+    <div id="pan-control-panel" aria-label="视角移动控制">
+        <button type="button" class="pan-control-button pan-up" data-pan-key="w" title="向上移动视角">↑</button>
+        <button type="button" class="pan-control-button pan-left" data-pan-key="a" title="向左移动视角">←</button>
+        <button type="button" id="pan-speed-button" class="pan-control-button pan-speed-button" title="切换视角移动速度">中</button>
+        <button type="button" class="pan-control-button pan-right" data-pan-key="d" title="向右移动视角">→</button>
+        <button type="button" class="pan-control-button pan-down" data-pan-key="s" title="向下移动视角">↓</button>
+    </div>
+    <button id="measure-btn" class="measure-control" title="测量基准：建模设置中的车道宽和应急车道宽">测量距离</button>
+    <button id="delete-measure-btn" class="measure-control" disabled>删除线段</button>
+    <button id="reset-view-btn" class="measure-control" title="将视角恢复到页面打开时的位置">复位视角</button>
+    <button id="save-measure-btn" class="measure-control">保存结果</button>
+    <button id="motion-btn" class="liability-control" disabled>播放运动</button>
+    <button id="report-btn" class="liability-control" disabled>事故报告</button>
+    <button id="liability-btn" class="liability-control" disabled>责任显示</button>
+    <div id="motion-bar" aria-hidden="true">
+        <button id="motion-play-btn" class="motion-round-btn" type="button" title="播放/暂停">▶</button>
+        <input id="motion-progress" type="range" min="0" max="1000" value="0" step="1">
+        <button id="motion-speed-btn" class="motion-round-btn" type="button" title="播放倍速">1X</button>
+    </div>
+    <div id="measure-status">点击“测量距离”后，在路面点击两点添加测量线；可勾选“锁定直角”强制相对车道线 0°/90° 方向，勾选“磁吸模式”自动吸附到轮胎/标记/道路线。</div>
+    <label id="magnetic-snap-toggle" title="勾选后，测量起点/终点会自动吸附到最近的轮胎、标记物中心或道路线">
+        <input type="checkbox" id="magnetic-snap-checkbox" checked>
+        <span>磁吸模式</span>
+    </label>
+    <label id="orthogonal-lock-toggle" title="勾选后，测量线终点会自动吸附到相对最近车道线成 0° 或 90° 的方向">
+        <input type="checkbox" id="orthogonal-lock-checkbox" checked>
+        <span>锁定直角</span>
+    </label>
+    <label id="vehicle-id-toggle" title="勾选后在车辆头顶显示车辆编号">
+        <input type="checkbox" id="vehicle-id-checkbox">
+        <span>车辆编号</span>
+    </label>
+    <div id="liability-card"></div>
+    <div id="report-modal" aria-hidden="true">
+        <div id="report-modal-card">
+            <div id="report-modal-header">
+                <span>事故报告</span>
+                <button id="report-close-btn" type="button">关闭</button>
+            </div>
+            <div id="report-modal-body">
+                <div id="report-expert-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 引入 settings.js -->
+    <script src="settings.js"></script>
+    <script id="runtime-config">
+const accidentSceneRuntime = {
+    sourceHtmlPath: "",
+    saveMeasurementsUrl: "http://127.0.0.1:8765/save-measurements",
+    savedMeasurements: []
+};
+</script>
+    
+    <!-- 引入 Three.js -->
+    <script src="../static/three/three.min.js"></script>
+    <script src="../static/three/OrbitControls.js"></script>
+    <script src="../static/three/GLTFLoader.js"></script>
+
+    <script>
+        // 1. 基础场景设置
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87ceeb);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 30, 5); 
+        camera.up.set(0, 1, 0); 
+        camera.lookAt(0, 0, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.localClippingEnabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        if (typeof THREE.OrbitControls !== 'function') {
+            THREE.OrbitControls = class {
+                constructor(camera) {
+                    this.object = camera;
+                    this.target = new THREE.Vector3(0, 0, 0);
+                    this.enableDamping = false;
+                    this.dampingFactor = 0;
+                    this.minPolarAngle = 0;
+                    this.maxPolarAngle = Math.PI;
+                    this.enabled = true;
+                }
+                update() {
+                    this.object.lookAt(this.target);
+                }
+            };
+        }
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.target.set(0, 0, 0);
+        // 允许水平环绕观察车辆前后左右，同时限制俯仰避免翻转
+        controls.minPolarAngle = 0.05;
+        controls.maxPolarAngle = 1.45;
+
+        const initialCameraPosition = camera.position.clone();
+        const initialControlsTarget = controls.target.clone();
+        const introOverlay = document.getElementById('intro-overlay');
+        const MODELING_REVEAL_SPEED = 0.82;
+        const MODELING_ORBIT_SPEED = 0.5;
+        const MODELING_FINAL_CAMERA_X = 0;
+        const MODELING_FINAL_CAMERA_Z = 20;
+        let introState = 'waiting';
+        let introStartTime = 0;
+        let introSettleStartTime = 0;
+        let introSettleStartAngle = 0;
+        let introSettleEndAngle = 0;
+        let introSettleStartRadius = 0;
+        let introSettleEndRadius = 0;
+
+        // Motion playback state must be declared before animate() runs: the first
+        // animate() call is synchronous and would hit the temporal dead zone
+        // if these lets lived below the animation loop.
+        let motionMode = false;
+        let motionPlaying = false;
+        let motionTime = 0;
+        let motionDuration = 0;
+        let motionSpeedIndex = 0;
+        let motionLastFrameTime = 0;
+        let motionTracks = [];
+        let motionAvailable = false;
+        // Pre-play hold: wait this long after pressing play before travel starts.
+        // Hold is NOT part of the progress bar / motionDuration.
+        let motionHolding = false;
+        let motionHoldElapsed = 0;
+        const MOTION_HOLD_SECONDS = 1.0;
+        // Fillet tuning for same-gear turns. G↔F reverse corners stay sharp so
+        // travel can flip ~180° while nose (via G/F) stays nearly continuous.
+        // MIN_CUT keeps gentle bends (e.g. ~8°) from collapsing to a ~0.2m nick
+        // that still looks like a sharp corner at the waypoint.
+        const MOTION_FILLET_TARGET_R = 2.5;
+        const MOTION_FILLET_MIN_CUT_M = 1.5;
+        const MOTION_FILLET_MIN_ANGLE = (2 * Math.PI) / 180;
+        const MOTION_FILLET_ARC_STEP_M = 0.25;
+        // Soft limit only for nose-flip class jumps (>90°); normal turns use absolute G/F yaw.
+        const MOTION_MAX_NOSE_FLIP_RAD_PER_M = (40 * Math.PI) / 180;
+        // Ease nose toward annotated rest heading over the last meters (avoid end-frame snap).
+        const MOTION_REST_ALIGN_M = 4.0;
+        const MOTION_SPEED_STEPS = [1, 2, 3];
+
+        const PAN_KEYS = new Set(['w', 'a', 's', 'd']);
+        const activePanKeys = new Set();
+        const panSpeeds = {
+            fast: 0.35,
+            medium: 0.18,
+            slow: 0.08
+        };
+        const panSpeedLabels = {
+            fast: '快',
+            medium: '中',
+            slow: '慢'
+        };
+        const panSpeedOrder = ['medium', 'slow', 'fast'];
+        let currentPanSpeed = 'medium';
+        const panSpeedButton = document.getElementById('pan-speed-button');
+        const panControlButtons = document.querySelectorAll('[data-pan-key]');
+
+        function switchToTopDownView() {
+            const distance = camera.position.distanceTo(controls.target);
+            const polar = Math.max(controls.minPolarAngle, 0.001);
+            camera.position.set(
+                controls.target.x,
+                controls.target.y + distance * Math.cos(polar),
+                controls.target.z + distance * Math.sin(polar)
+            );
+            camera.up.set(0, 1, 0);
+            controls.update();
+        }
+
+        function isFormElementFocused() {
+            const el = document.activeElement;
+            if (!el) return false;
+            const tag = el.tagName;
+            return tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable;
+        }
+
+        function startPanKey(key) {
+            if (introState !== 'finished') return;
+            if (!PAN_KEYS.has(key)) return;
+            if (activePanKeys.size === 0) switchToTopDownView();
+            activePanKeys.add(key);
+        }
+
+        function stopPanKey(key) {
+            if (PAN_KEYS.has(key)) activePanKeys.delete(key);
+        }
+
+        function getPanSpeedPerFrame() {
+            return panSpeeds[currentPanSpeed];
+        }
+
+        function updatePanSpeedButton() {
+            if (panSpeedButton) panSpeedButton.textContent = panSpeedLabels[currentPanSpeed];
+        }
+
+        function cyclePanSpeed() {
+            const index = panSpeedOrder.indexOf(currentPanSpeed);
+            currentPanSpeed = panSpeedOrder[(index + 1) % panSpeedOrder.length];
+            updatePanSpeedButton();
+            panSpeedButton.classList.remove('is-bouncing');
+            void panSpeedButton.offsetWidth;
+            panSpeedButton.classList.add('is-bouncing');
+        }
+
+        window.addEventListener('keydown', (event) => {
+            const key = event.key && event.key.toLowerCase();
+            if (!PAN_KEYS.has(key)) return;
+            if (isFormElementFocused()) return;
+            if (event.repeat) { event.preventDefault(); return; }
+            startPanKey(key);
+            event.preventDefault();
+        });
+
+        window.addEventListener('keyup', (event) => {
+            const key = event.key && event.key.toLowerCase();
+            stopPanKey(key);
+        });
+
+        window.addEventListener('blur', () => activePanKeys.clear());
+
+        panControlButtons.forEach(button => {
+            const panKey = button.dataset.panKey;
+            const stopCurrentPan = (event) => {
+                event.preventDefault();
+                stopPanKey(panKey);
+                button.classList.remove('is-pressed');
+            };
+
+            button.addEventListener('pointerdown', (event) => {
+                event.preventDefault();
+                startPanKey(panKey);
+                button.classList.add('is-pressed');
+            });
+            button.addEventListener('pointerup', stopCurrentPan);
+            button.addEventListener('pointerleave', stopCurrentPan);
+            button.addEventListener('pointercancel', stopCurrentPan);
+        });
+
+        panSpeedButton.addEventListener('click', (event) => {
+            event.preventDefault();
+            cyclePanSpeed();
+        });
+
+        function applyKeyboardPan() {
+            if (activePanKeys.size === 0) return;
+            const panSpeedPerFrame = getPanSpeedPerFrame();
+            let dx = 0, dz = 0;
+            if (activePanKeys.has('w')) dz -= panSpeedPerFrame;
+            if (activePanKeys.has('s')) dz += panSpeedPerFrame;
+            if (activePanKeys.has('a')) dx -= panSpeedPerFrame;
+            if (activePanKeys.has('d')) dx += panSpeedPerFrame;
+            if (dx === 0 && dz === 0) return;
+            controls.target.x += dx;
+            controls.target.z += dz;
+            camera.position.x += dx;
+            camera.position.z += dz;
+            controls.update();
+        }
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const sceneBounds = (() => {
+            const roads = Array.isArray(accidentSettings.roads) ? accidentSettings.roads : [];
+            const vehicles = Array.isArray(accidentSettings.vehicles) ? accidentSettings.vehicles : [];
+            const markers = Array.isArray(accidentSettings.markers) ? accidentSettings.markers : [];
+            const roadPoints = roads.flatMap(road => [road.start, road.end, road.center])
+                .filter(point => point && Number.isFinite(Number(point.x)) && Number.isFinite(Number(point.z)))
+                .map(point => ({ x: Number(point.x), z: Number(point.z) }));
+            const roadXs = roadPoints.map(point => point.x)
+                .concat(roads.map(road => Number(road.x)).filter(Number.isFinite));
+            const roadZs = roadPoints.map(point => point.z);
+            const vehicleXs = vehicles.map(vehicle => Number(vehicle.position && vehicle.position.x)).filter(Number.isFinite);
+            const vehicleZs = vehicles.map(vehicle => Number(vehicle.position && vehicle.position.z)).filter(Number.isFinite);
+            const markerXs = markers.map(marker => Number(marker.position && marker.position.x)).filter(Number.isFinite);
+            const markerZs = markers.map(marker => Number(marker.position && marker.position.z)).filter(Number.isFinite);
+            const xs = roadXs.concat(vehicleXs, markerXs);
+            const zs = roadZs.concat(vehicleZs, markerZs);
+            const minX = xs.length > 0 ? Math.min(...xs) : -12.5;
+            const maxX = xs.length > 0 ? Math.max(...xs) : 12.5;
+            const minZ = zs.length > 0 ? Math.min(...zs) : -30;
+            const maxZ = zs.length > 0 ? Math.max(...zs) : 30;
+            const marginX = 6;
+            const marginZ = 18;
+            const width = Math.max(25, maxX - minX + marginX * 2);
+            const depth = Math.max(60, maxZ - minZ + marginZ * 2);
+            return {
+                centerX: (minX + maxX) / 2,
+                centerZ: (minZ + maxZ) / 2,
+                width,
+                depth,
+                halfDepth: depth / 2,
+                shadowSpan: Math.max(width, depth) / 2 + 10
+            };
+        })();
+
+        let lastViewStateLogTime = 0;
+        const VIEW_STATE_LOG_INTERVAL_MS = 150;
+
+        function vectorToLogObject(vector) {
+            return {
+                x: Number(vector.x.toFixed(3)),
+                y: Number(vector.y.toFixed(3)),
+                z: Number(vector.z.toFixed(3))
+            };
+        }
+
+        function formatVectorForLog(label, vector) {
+            const value = vectorToLogObject(vector);
+            return `${label}: x=${value.x}, y=${value.y}, z=${value.z}`;
+        }
+
+        function logCurrentViewState() {
+            const now = performance.now();
+            if (now - lastViewStateLogTime < VIEW_STATE_LOG_INTERVAL_MS) return;
+            lastViewStateLogTime = now;
+
+            console.log(
+                '[视角变化] ' +
+                `${formatVectorForLog('当前用户视角XYZ', camera.position)}; ` +
+                `${formatVectorForLog('当前观察中心点', controls.target)}; ` +
+                `模型中心点位置: x=${Number(sceneBounds.centerX.toFixed(3))}, y=0, z=${Number(sceneBounds.centerZ.toFixed(3))}`
+            );
+        }
+
+        controls.addEventListener('change', logCurrentViewState);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(10, 20, 10);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        dirLight.shadow.camera.left = -sceneBounds.shadowSpan;
+        dirLight.shadow.camera.right = sceneBounds.shadowSpan;
+        dirLight.shadow.camera.top = sceneBounds.shadowSpan;
+        dirLight.shadow.camera.bottom = -sceneBounds.shadowSpan;
+        scene.add(dirLight);
+
+        // 2. 动态生成地面和车道线
+        // 灰色路面始终与道路线平行（绕 Y 轴对齐道路方向），不再使用世界轴对齐的场景包围盒。
+        const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const lineExtMat = lineMat;
+
+        function getRoadPoint(road, key) {
+            const point = road && road[key];
+            if (!point) return null;
+            const x = Number(point.x);
+            const z = Number(point.z);
+            return Number.isFinite(x) && Number.isFinite(z) ? new THREE.Vector3(x, 0.01, z) : null;
+        }
+
+        function getRoadSegment(road) {
+            const start = getRoadPoint(road, 'start');
+            const end = getRoadPoint(road, 'end');
+            const originalStart = getRoadPoint(road, 'originalStart');
+            const originalEnd = getRoadPoint(road, 'originalEnd');
+            if (start && end) {
+                const delta = end.clone().sub(start);
+                const length = Math.sqrt(delta.x * delta.x + delta.z * delta.z);
+                if (length > 0.001) {
+                    const center = start.clone().add(end).multiplyScalar(0.5);
+                    const direction = new THREE.Vector3(delta.x / length, 0, delta.z / length);
+                    let originalStartT = -length / 2;
+                    let originalEndT = length / 2;
+                    if (originalStart && originalEnd) {
+                        const tA = originalStart.clone().sub(center).dot(direction);
+                        const tB = originalEnd.clone().sub(center).dot(direction);
+                        originalStartT = Math.min(tA, tB);
+                        originalEndT = Math.max(tA, tB);
+                    }
+                    return { center, direction, length, originalStartT, originalEndT };
+                }
+            }
+
+            const x = Number(road && road.x);
+            const fallbackX = Number.isFinite(x) ? x : sceneBounds.centerX;
+            return {
+                center: new THREE.Vector3(fallbackX, 0.01, sceneBounds.centerZ),
+                direction: new THREE.Vector3(0, 0, 1),
+                length: sceneBounds.depth,
+                originalStartT: -sceneBounds.depth / 2,
+                originalEndT: sceneBounds.depth / 2
+            };
+        }
+
+        function buildRoadAlignedGround() {
+            const roads = Array.isArray(accidentSettings.roads) ? accidentSettings.roads : [];
+            const vehicles = Array.isArray(accidentSettings.vehicles) ? accidentSettings.vehicles : [];
+            const markers = Array.isArray(accidentSettings.markers) ? accidentSettings.markers : [];
+
+            let dirX = 0;
+            let dirZ = 0;
+            const segments = roads.map(road => getRoadSegment(road));
+            segments.forEach(segment => {
+                if (!segment || !segment.direction) return;
+                // Keep directions consistent (flip if opposite to the running average).
+                const candidate = segment.direction;
+                if (dirX * candidate.x + dirZ * candidate.z < 0) {
+                    dirX -= candidate.x;
+                    dirZ -= candidate.z;
+                } else {
+                    dirX += candidate.x;
+                    dirZ += candidate.z;
+                }
+            });
+            let dirLen = Math.hypot(dirX, dirZ);
+            if (dirLen < 1e-6) {
+                dirX = 0;
+                dirZ = 1;
+                dirLen = 1;
+            } else {
+                dirX /= dirLen;
+                dirZ /= dirLen;
+            }
+            const along = new THREE.Vector3(dirX, 0, dirZ);
+            const lateral = new THREE.Vector3(-dirZ, 0, dirX);
+
+            const points = [];
+            segments.forEach(segment => {
+                if (!segment) return;
+                const half = segment.length * 0.5;
+                points.push(
+                    segment.center.clone().add(along.clone().multiplyScalar(-half)),
+                    segment.center.clone().add(along.clone().multiplyScalar(half)),
+                    segment.center.clone()
+                );
+            });
+            vehicles.forEach(vehicle => {
+                const px = Number(vehicle && vehicle.position && vehicle.position.x);
+                const pz = Number(vehicle && vehicle.position && vehicle.position.z);
+                if (Number.isFinite(px) && Number.isFinite(pz)) {
+                    points.push(new THREE.Vector3(px, 0, pz));
+                }
+            });
+            markers.forEach(marker => {
+                const px = Number(marker && marker.position && marker.position.x);
+                const pz = Number(marker && marker.position && marker.position.z);
+                if (Number.isFinite(px) && Number.isFinite(pz)) {
+                    points.push(new THREE.Vector3(px, 0, pz));
+                }
+            });
+
+            if (points.length === 0) {
+                const groundGeometry = new THREE.PlaneGeometry(sceneBounds.width, sceneBounds.depth);
+                const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x999999 });
+                const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+                ground.rotation.x = -Math.PI / 2;
+                ground.position.set(sceneBounds.centerX, 0, sceneBounds.centerZ);
+                ground.receiveShadow = true;
+                scene.add(ground);
+                return ground;
+            }
+
+            let minAlong = Infinity;
+            let maxAlong = -Infinity;
+            let minLateral = Infinity;
+            let maxLateral = -Infinity;
+            // Project relative to world origin onto road axes.
+            points.forEach(point => {
+                const a = point.x * along.x + point.z * along.z;
+                const l = point.x * lateral.x + point.z * lateral.z;
+                minAlong = Math.min(minAlong, a);
+                maxAlong = Math.max(maxAlong, a);
+                minLateral = Math.min(minLateral, l);
+                maxLateral = Math.max(maxLateral, l);
+            });
+
+            const marginAlong = 12;
+            const marginLateral = 4;
+            const alongSpan = Math.max(20, maxAlong - minAlong + marginAlong * 2);
+            const lateralSpan = Math.max(8, maxLateral - minLateral + marginLateral * 2);
+            const alongMid = (minAlong + maxAlong) / 2;
+            const lateralMid = (minLateral + maxLateral) / 2;
+            const centerX = along.x * alongMid + lateral.x * lateralMid;
+            const centerZ = along.z * alongMid + lateral.z * lateralMid;
+
+            // PlaneGeometry(width, height) lies in local XY (width=+X, height=+Y, normal=+Z).
+            // Map local X→lateral, Y→along-road, Z→world up so the ground stays horizontal.
+            // Do NOT use rotation.x + rotation.y with default XYZ Euler order: after X=-90°,
+            // local Y is no longer world-up and rotation.y tips the plane into a vertical wall.
+            const groundGeometry = new THREE.PlaneGeometry(lateralSpan, alongSpan);
+            const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x999999 });
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            const up = new THREE.Vector3(0, 1, 0);
+            const basis = new THREE.Matrix4().makeBasis(lateral, along, up);
+            ground.quaternion.setFromRotationMatrix(basis);
+            ground.position.set(centerX, 0, centerZ);
+            ground.receiveShadow = true;
+            scene.add(ground);
+            return ground;
+        }
+
+        const ground = buildRoadAlignedGround();
+
+        function addRoadStripAt(segment, t1, t2, material) {
+            const span = t2 - t1;
+            if (span <= 0.001) return;
+            const lineGeo = new THREE.BoxGeometry(0.15, 0.02, span);
+            const line = new THREE.Mesh(lineGeo, material);
+            const center = segment.center.clone()
+                .add(segment.direction.clone().multiplyScalar((t1 + t2) / 2));
+            line.position.copy(center);
+            line.rotation.y = Math.atan2(segment.direction.x, segment.direction.z);
+            scene.add(line);
+        }
+
+        function addDashedSpan(segment, t1, t2, dashLength, dashStep, material) {
+            if (t2 - t1 <= 0.001) return;
+            for (let dashStart = t1; dashStart < t2; dashStart += dashStep) {
+                const currentLength = Math.min(dashLength, t2 - dashStart);
+                if (currentLength <= 0) continue;
+                addRoadStripAt(segment, dashStart, dashStart + currentLength, material);
+            }
+        }
+
+        // 测量距离的“磁吸模式”候选数据：吸附点 + 道路线段
+        const snapPoints = [];
+        const snapLines = [];
+
+        accidentSettings.roads.forEach(road => {
+            const segment = getRoadSegment(road);
+            const tStart = -segment.length / 2;
+            const tEnd = segment.length / 2;
+            const tA = Math.max(tStart, Math.min(tEnd, segment.originalStartT));
+            const tB = Math.max(tStart, Math.min(tEnd, segment.originalEndT));
+            const lineStart = segment.center.clone().add(segment.direction.clone().multiplyScalar(tA));
+            const lineEnd = segment.center.clone().add(segment.direction.clone().multiplyScalar(tB));
+            if (tB - tA > 0.001) {
+                snapLines.push({ ax: lineStart.x, az: lineStart.z, bx: lineEnd.x, bz: lineEnd.z });
+            }
+            if (road.type === 'solid') {
+                addRoadStripAt(segment, tStart, tA, lineExtMat);
+                addRoadStripAt(segment, tA, tB, lineMat);
+                addRoadStripAt(segment, tB, tEnd, lineExtMat);
+            } else if (road.type === 'dash') {
+                const dashLength = 1.5;
+                const dashStep = 3.0;
+                addDashedSpan(segment, tStart, tA, dashLength, dashStep, lineExtMat);
+                addDashedSpan(segment, tA, tB, dashLength, dashStep, lineMat);
+                addDashedSpan(segment, tB, tEnd, dashLength, dashStep, lineExtMat);
+            }
+        });
+
+        <!-- VEHICLE_MODEL_SCRIPT -->
+        <!-- MARKER_MODEL_SCRIPT -->
+
+        // Mapping overlays are preview-only; world measurement uses synthetic wheel centers.
+        if (typeof setShowVehicleMapping === 'function') {
+            setShowVehicleMapping(false);
+        }
+
+        const buildRevealVehicles = [];
+        const vehicleEntities = [];
+        const markerEntities = [];
+        const vehicleRaycastTargets = [];
+        let hoveredVehicleEntity = null;
+        let hoveredVehicleOutline = null;
+
+        function findVehicleResponsibility(vehicleId) {
+            const analysis = accidentSceneRuntime && accidentSceneRuntime.liabilityAnalysis && accidentSceneRuntime.liabilityAnalysis.response;
+            const responsibilities = analysis && Array.isArray(analysis.vehicleResponsibilities)
+                ? analysis.vehicleResponsibilities
+                : [];
+            return responsibilities.find(item => String(item.vehicleId || '') === String(vehicleId || '')) || null;
+        }
+
+        function getLiabilityBadgeText(liability) {
+            const raw = String((liability && liability.responsibility) || '').trim();
+            if (!raw || raw === '责任待定' || raw === '未提供') return '';
+            if (raw === '同责') return '同等';
+            return raw;
+        }
+
+        function createRoofBadgeTexture(text, textColor) {
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            const fontSize = 76;
+            const paddingX = 26;
+            const paddingY = 14;
+            context.font = `900 ${fontSize}px sans-serif`;
+            const textWidth = Math.ceil(context.measureText(text).width);
+            const width = textWidth + paddingX * 2;
+            const height = fontSize + paddingY * 2;
+            canvas.width = width;
+            canvas.height = height;
+            context.font = `900 ${fontSize}px sans-serif`;
+            context.textAlign = 'center';
+            context.textBaseline = 'middle';
+            context.fillStyle = '#ffe600';
+            context.fillRect(0, 0, width, height);
+            context.lineWidth = 8;
+            context.strokeStyle = 'rgba(150, 0, 0, 0.35)';
+            context.strokeRect(4, 4, width - 8, height - 8);
+            context.fillStyle = textColor || '#d90000';
+            context.fillText(text, width / 2, height / 2 + 2);
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.minFilter = THREE.LinearFilter;
+            texture.needsUpdate = true;
+            return { texture, width, height };
+        }
+
+        function createLiabilityBadgeTexture(text) {
+            return createRoofBadgeTexture(text, '#d90000');
+        }
+
+        function createVehicleIdBadgeTexture(text) {
+            return createRoofBadgeTexture(text, '#0057d9');
+        }
+
+        function attachRoofBadgeSprite(vehicleEntity, text, options) {
+            if (!text || !vehicleEntity || !vehicleEntity.group) return null;
+            const opts = options || {};
+            vehicleEntity.group.updateMatrixWorld(true);
+            const bounds = new THREE.Box3().setFromObject(vehicleEntity.group);
+            const horizontalWidth = Math.abs(bounds.max.x - bounds.min.x);
+            const horizontalDepth = Math.abs(bounds.max.z - bounds.min.z);
+            const vehicleWidth = Math.max(0.8, Math.min(horizontalWidth, horizontalDepth));
+            const labelData = (opts.createTexture || createLiabilityBadgeTexture)(text);
+            const labelWidth = Math.max(0.9, vehicleWidth * 0.55);
+            const labelHeight = labelWidth * (labelData.height / labelData.width);
+            const material = new THREE.SpriteMaterial({
+                map: labelData.texture,
+                transparent: true,
+                depthTest: false,
+                depthWrite: false
+            });
+            const label = new THREE.Sprite(material);
+            const worldPosition = new THREE.Vector3(
+                (bounds.min.x + bounds.max.x) / 2,
+                bounds.max.y + labelHeight * 0.8,
+                (bounds.min.z + bounds.max.z) / 2
+            );
+            vehicleEntity.group.worldToLocal(worldPosition);
+            label.position.copy(worldPosition);
+            label.scale.set(labelWidth, labelHeight, 1);
+            label.renderOrder = opts.renderOrder || 10020;
+            label.visible = false;
+            if (opts.userDataKey) {
+                label.userData[opts.userDataKey] = true;
+            }
+            vehicleEntity.group.add(label);
+            return label;
+        }
+
+        function attachLiabilityRoofLabel(vehicleEntity) {
+            const text = getLiabilityBadgeText(vehicleEntity && vehicleEntity.liability);
+            const label = attachRoofBadgeSprite(vehicleEntity, text, {
+                createTexture: createLiabilityBadgeTexture,
+                userDataKey: 'isLiabilityBadge',
+                renderOrder: 10020
+            });
+            if (label) {
+                vehicleEntity.liabilityBadge = label;
+            }
+        }
+
+        function attachVehicleIdRoofLabel(vehicleEntity) {
+            const text = String((vehicleEntity && vehicleEntity.vehicleId) || '').trim();
+            if (!text) return;
+            const label = attachRoofBadgeSprite(vehicleEntity, text, {
+                createTexture: createVehicleIdBadgeTexture,
+                userDataKey: 'isVehicleIdBadge',
+                renderOrder: 10019
+            });
+            if (label) {
+                vehicleEntity.vehicleIdBadge = label;
+            }
+        }
+
+        function setLiabilityBadgesVisible(visible) {
+            vehicleEntities.forEach(vehicleEntity => {
+                if (vehicleEntity.liabilityBadge) {
+                    vehicleEntity.liabilityBadge.visible = !!visible;
+                }
+            });
+        }
+
+        function forEachVehicleMaterial(vehicle, callback) {
+            vehicle.traverse(child => {
+                if (!child.material) return;
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                materials.forEach(callback);
+            });
+        }
+
+        function setVehicleBuildClip(vehicle, clipPlane) {
+            forEachVehicleMaterial(vehicle, material => {
+                material.clippingPlanes = [clipPlane];
+                material.clipShadows = true;
+                material.needsUpdate = true;
+            });
+        }
+
+        function clearVehicleBuildClip(vehicle) {
+            forEachVehicleMaterial(vehicle, material => {
+                material.clippingPlanes = null;
+                material.clipShadows = false;
+                material.needsUpdate = true;
+            });
+        }
+
+        function registerVehicleBuildReveal(vehicle) {
+            const bounds = new THREE.Box3().setFromObject(vehicle);
+            const minY = Number.isFinite(bounds.min.y) ? bounds.min.y : vehicle.position.y;
+            const maxY = Number.isFinite(bounds.max.y) ? bounds.max.y : vehicle.position.y + 1;
+            const clipPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), minY - 0.04);
+            setVehicleBuildClip(vehicle, clipPlane);
+            vehicle.visible = false;
+            buildRevealVehicles.push({ vehicle, minY, maxY, clipPlane });
+        }
+
+        whenVehicleModelsReady(function () {
+            accidentSettings.vehicles.forEach(vehicleConfig => {
+                const vehicle = createVehicle(vehicleConfig);
+                const vehicleEntity = {
+                    vehicleId: String(vehicleConfig.vehicleId || ''),
+                    group: vehicle,
+                    config: vehicleConfig,
+                    liability: findVehicleResponsibility(vehicleConfig.vehicleId)
+                };
+                vehicle.userData.vehicleId = vehicleEntity.vehicleId;
+                vehicle.userData.vehicleEntity = vehicleEntity;
+                vehicle.traverse(child => {
+                    if (!child.isMesh) return;
+                    if (child.userData && child.userData.ignoreVehicleRaycast) return;
+                    child.userData.vehicleId = vehicleEntity.vehicleId;
+                    child.userData.vehicleEntity = vehicleEntity;
+                    vehicleRaycastTargets.push(child);
+                });
+                scene.add(vehicle);
+                vehicleEntities.push(vehicleEntity);
+                registerVehicleBuildReveal(vehicle);
+                attachLiabilityRoofLabel(vehicleEntity);
+                attachVehicleIdRoofLabel(vehicleEntity);
+                // 收集该车轮胎的世界坐标，作为磁吸候选点
+                vehicle.updateMatrixWorld(true);
+                const wheelWorldPos = new THREE.Vector3();
+                vehicle.traverse(child => {
+                    if (child && child.userData && child.userData.isWheel) {
+                        child.getWorldPosition(wheelWorldPos);
+                        snapPoints.push({ x: wheelWorldPos.x, z: wheelWorldPos.z });
+                    }
+                });
+            });
+        });
+
+        (Array.isArray(accidentSettings.markers) ? accidentSettings.markers : []).forEach(markerConfig => {
+            const marker = createSceneMarker(markerConfig);
+            marker.userData.markerId = String(markerConfig.markerId || '');
+            marker.userData.markerType = String(markerConfig.type || '');
+            scene.add(marker);
+            markerEntities.push({
+                group: marker,
+                config: markerConfig,
+                hideDuringMotion: !!(marker.userData && marker.userData.hideDuringMotion)
+                    || markerConfig.type === '散落物'
+                    || markerConfig.type === '碰撞点'
+            });
+            registerVehicleBuildReveal(marker);
+            // 收集标记物中心点的世界坐标，作为磁吸候选点
+            const pos = markerConfig && markerConfig.position;
+            if (pos && Number.isFinite(Number(pos.x)) && Number.isFinite(Number(pos.z))) {
+                snapPoints.push({ x: Number(pos.x), z: Number(pos.z) });
+            }
+        });
+
+        let previewDashLine = null;
+
+        function getIntroOrbitTarget() {
+            return new THREE.Vector3(sceneBounds.centerX, 0, sceneBounds.centerZ);
+        }
+
+        function getDefaultIntroOrbitRadius() {
+            return Math.max(22, Math.max(sceneBounds.width, sceneBounds.depth) * 0.55);
+        }
+
+        function getIntroOrbitAngle(elapsedSeconds) {
+            return -Math.PI / 2 + elapsedSeconds * MODELING_ORBIT_SPEED;
+        }
+
+        function setIntroOrbitCamera(angle, radius) {
+            const target = getIntroOrbitTarget();
+            controls.target.copy(target);
+            camera.position.set(
+                target.x + Math.cos(angle) * radius,
+                20,
+                target.z + Math.sin(angle) * radius
+            );
+            camera.up.set(0, 1, 0);
+            camera.lookAt(target);
+        }
+
+        function updateIntroOrbit(elapsedSeconds) {
+            setIntroOrbitCamera(getIntroOrbitAngle(elapsedSeconds), getDefaultIntroOrbitRadius());
+        }
+
+        function easeInOutCubic(t) {
+            return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        }
+
+        function startIntroSettle(elapsedSeconds) {
+            const target = getIntroOrbitTarget();
+            const finalDx = MODELING_FINAL_CAMERA_X - target.x;
+            const finalDz = MODELING_FINAL_CAMERA_Z - target.z;
+            let finalAngle = Math.atan2(finalDz, finalDx);
+            introSettleStartTime = performance.now();
+            introSettleStartAngle = getIntroOrbitAngle(elapsedSeconds);
+            introSettleStartRadius = getDefaultIntroOrbitRadius();
+            introSettleEndRadius = Math.max(1, Math.sqrt(finalDx * finalDx + finalDz * finalDz));
+            while (finalAngle <= introSettleStartAngle) finalAngle += Math.PI * 2;
+            introSettleEndAngle = finalAngle;
+            introState = 'settling';
+        }
+
+        function finishIntroModeling() {
+            introState = 'finished';
+            buildRevealVehicles.forEach(item => {
+                item.vehicle.visible = true;
+                clearVehicleBuildClip(item.vehicle);
+            });
+            controls.enabled = true;
+            controls.update();
+            if (typeof updateToolbarButtonsState === 'function') {
+                updateToolbarButtonsState();
+            }
+        }
+
+        function updateIntroModelingAnimation() {
+            if (introState !== 'building' && introState !== 'settling') return;
+
+            if (introState === 'settling') {
+                const elapsedSeconds = (performance.now() - introSettleStartTime) / 1000;
+                const angleDistance = introSettleEndAngle - introSettleStartAngle;
+                const duration = Math.max(0.001, angleDistance / MODELING_ORBIT_SPEED);
+                const progress = Math.min(1, elapsedSeconds / duration);
+                const angle = introSettleStartAngle + MODELING_ORBIT_SPEED * elapsedSeconds;
+                const radiusProgress = easeInOutCubic(progress);
+                const radius = introSettleStartRadius + (introSettleEndRadius - introSettleStartRadius) * radiusProgress;
+                setIntroOrbitCamera(Math.min(angle, introSettleEndAngle), radius);
+                if (progress >= 1) finishIntroModeling();
+                return;
+            }
+
+            const elapsedSeconds = (performance.now() - introStartTime) / 1000;
+            let allFinished = true;
+
+            updateIntroOrbit(elapsedSeconds);
+            buildRevealVehicles.forEach(item => {
+                item.vehicle.visible = true;
+                item.clipPlane.constant = item.minY - 0.04 + elapsedSeconds * MODELING_REVEAL_SPEED;
+                if (item.clipPlane.constant < item.maxY + 0.08) allFinished = false;
+            });
+
+            if (allFinished) startIntroSettle(elapsedSeconds);
+        }
+
+        function startIntroModeling() {
+            if (introState !== 'waiting') return;
+            introState = 'building';
+            introStartTime = performance.now();
+            activePanKeys.clear();
+            controls.enabled = false;
+            if (introOverlay) introOverlay.classList.add('is-hidden');
+            updateIntroOrbit(0);
+            buildRevealVehicles.forEach(item => {
+                item.vehicle.visible = true;
+                item.clipPlane.constant = item.minY - 0.04;
+            });
+            if (typeof updateToolbarButtonsState === 'function') {
+                updateToolbarButtonsState();
+            }
+        }
+
+        whenVehicleModelsReady(function () {
+            if (introOverlay) {
+                introOverlay.addEventListener('click', startIntroModeling);
+                introOverlay.addEventListener('keydown', event => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        startIntroModeling();
+                    }
+                });
+            }
+        });
+
+        // 5. 动画循环
+        function animate() {
+            requestAnimationFrame(animate);
+            updateIntroModelingAnimation();
+            try {
+                if (typeof updateMotionPlayback === 'function') {
+                    updateMotionPlayback();
+                }
+            } catch (err) {
+                // Never let motion playback abort the render loop.
+                console.error(err);
+            }
+            applyKeyboardPan();
+            controls.update();
+            updatePreviewDashBreath();
+            if (typeof updateMarkerAnimations === 'function') {
+                updateMarkerAnimations(scene, performance.now());
+            }
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // 6. 窗口大小适配
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // 7. 测量交互逻辑（基准来自建模设置中的车道宽和应急车道宽）
+        const measureBtn = document.getElementById('measure-btn');
+        const deleteMeasureBtn = document.getElementById('delete-measure-btn');
+        const resetViewBtn = document.getElementById('reset-view-btn');
+        const saveMeasureBtn = document.getElementById('save-measure-btn');
+        const reportBtn = document.getElementById('report-btn');
+        const liabilityBtn = document.getElementById('liability-btn');
+        const motionBtn = document.getElementById('motion-btn');
+        const motionBar = document.getElementById('motion-bar');
+        const motionPlayBtn = document.getElementById('motion-play-btn');
+        const motionProgress = document.getElementById('motion-progress');
+        const motionSpeedBtn = document.getElementById('motion-speed-btn');
+        const measureStatus = document.getElementById('measure-status');
+        const orthogonalLockCheckbox = document.getElementById('orthogonal-lock-checkbox');
+        const magneticSnapCheckbox = document.getElementById('magnetic-snap-checkbox');
+        const vehicleIdCheckbox = document.getElementById('vehicle-id-checkbox');
+        const liabilityCard = document.getElementById('liability-card');
+        const reportModal = document.getElementById('report-modal');
+        const reportCloseBtn = document.getElementById('report-close-btn');
+        const reportExpertList = document.getElementById('report-expert-list');
+        const runtimeConfig = typeof accidentSceneRuntime === 'object' && accidentSceneRuntime ? accidentSceneRuntime : {};
+        const DEFAULT_SAVE_MEASUREMENTS_URL = 'http://127.0.0.1:8765/save-measurements';
+        const SERVICE_REQUIRED_MESSAGE = '请先启动 Python 程序，再编辑或保存测量线。';
+        const measureLayer = new THREE.Group();
+        measureLayer.name = 'measureLayer';
+        measureLayer.renderOrder = 9999;
+        scene.add(measureLayer);
+
+        const raycaster = new THREE.Raycaster();
+        raycaster.params.Line.threshold = 0.35;
+        const mouse = new THREE.Vector2();
+        const measureVisualY = 0.18;
+        const measureColor = 0x00ff00;
+        const previewMeasureColor = 0xff2222;
+        const selectedMeasureColor = 0xffff00;
+        let measureMode = false;
+        let measureStart = null;
+        let previewMeasurement = null;
+        let selectedMeasurementId = null;
+        let measurementIdSeed = 1;
+        const measurements = [];
+        const measurePickables = [];
+        let activeSaveMeasurementsUrl = '';
+        let liabilityMode = false;
+        let saveInProgress = false;
+        const liabilityAvailable = !!(runtimeConfig.liabilityAvailable && runtimeConfig.liabilityAnalysis);
+        const playbackSpeedFactor = Math.min(
+            0.25,
+            Math.max(0.02, Number(runtimeConfig.playbackSpeedFactor) || 0.1)
+        );
+
+        function formatLiabilityText(vehicleEntity) {
+            const liability = vehicleEntity && vehicleEntity.liability;
+            if (!liability) {
+                return `${vehicleEntity.vehicleId || '未编号车辆'}\n暂无责任信息`;
+            }
+            return [
+                `${vehicleEntity.vehicleId || '未编号车辆'}`,
+                `责任: ${liability.responsibility || '未提供'}`,
+                '',
+                `原因: ${liability.reason || '未提供'}`,
+                '',
+                `事故角色: ${liability.accidentRole || '未提供'}`
+            ].join('\n');
+        }
+
+        function setLiabilityCardVisible(visible) {
+            if (!liabilityCard) return;
+            liabilityCard.classList.toggle('is-visible', !!visible);
+        }
+
+        function clearHoveredVehicleOutline() {
+            if (!hoveredVehicleOutline) return;
+            if (hoveredVehicleOutline.parent) {
+                hoveredVehicleOutline.parent.remove(hoveredVehicleOutline);
+            } else {
+                scene.remove(hoveredVehicleOutline);
+            }
+            if (hoveredVehicleOutline.geometry) hoveredVehicleOutline.geometry.dispose();
+            if (hoveredVehicleOutline.material) hoveredVehicleOutline.material.dispose();
+            hoveredVehicleOutline = null;
+        }
+
+        // Local-space body bounds relative to the vehicle group, so the hover
+        // outline can stay oriented with the car instead of world axes.
+        function getVehicleLocalBodyBounds(vehicleGroup) {
+            const bounds = new THREE.Box3();
+            const childBounds = new THREE.Box3();
+            const invWorld = new THREE.Matrix4();
+            const localMatrix = new THREE.Matrix4();
+            let hasBodyMesh = false;
+            if (!vehicleGroup) {
+                bounds.makeEmpty();
+                return bounds;
+            }
+            vehicleGroup.updateMatrixWorld(true);
+            invWorld.copy(vehicleGroup.matrixWorld).invert();
+            vehicleGroup.traverse(child => {
+                if (!child.isMesh || !child.geometry) return;
+                if (child.userData && child.userData.ignoreLiabilityBounds) return;
+                if (typeof VEHICLE_LIGHT_MATERIAL !== 'undefined' && child.material === VEHICLE_LIGHT_MATERIAL) return;
+                if (typeof VEHICLE_REAR_LIGHT_MATERIAL !== 'undefined' && child.material === VEHICLE_REAR_LIGHT_MATERIAL) return;
+                if (typeof VEHICLE_BEAM_MATERIAL !== 'undefined' && child.material === VEHICLE_BEAM_MATERIAL) return;
+                if (!child.geometry.boundingBox) child.geometry.computeBoundingBox();
+                localMatrix.multiplyMatrices(invWorld, child.matrixWorld);
+                childBounds.copy(child.geometry.boundingBox).applyMatrix4(localMatrix);
+                bounds.union(childBounds);
+                hasBodyMesh = true;
+            });
+            if (!hasBodyMesh) {
+                const worldBounds = new THREE.Box3().setFromObject(vehicleGroup);
+                if (!worldBounds.isEmpty()) {
+                    const corners = [
+                        new THREE.Vector3(worldBounds.min.x, worldBounds.min.y, worldBounds.min.z),
+                        new THREE.Vector3(worldBounds.min.x, worldBounds.min.y, worldBounds.max.z),
+                        new THREE.Vector3(worldBounds.min.x, worldBounds.max.y, worldBounds.min.z),
+                        new THREE.Vector3(worldBounds.min.x, worldBounds.max.y, worldBounds.max.z),
+                        new THREE.Vector3(worldBounds.max.x, worldBounds.min.y, worldBounds.min.z),
+                        new THREE.Vector3(worldBounds.max.x, worldBounds.min.y, worldBounds.max.z),
+                        new THREE.Vector3(worldBounds.max.x, worldBounds.max.y, worldBounds.min.z),
+                        new THREE.Vector3(worldBounds.max.x, worldBounds.max.y, worldBounds.max.z)
+                    ];
+                    corners.forEach(corner => {
+                        corner.applyMatrix4(invWorld);
+                        bounds.expandByPoint(corner);
+                    });
+                }
+            }
+            return bounds;
+        }
+
+        function updateHoveredVehicleOutline(vehicleEntity) {
+            clearHoveredVehicleOutline();
+            if (!vehicleEntity || !vehicleEntity.group) return;
+            const localBounds = getVehicleLocalBodyBounds(vehicleEntity.group);
+            if (localBounds.isEmpty()) return;
+
+            const size = localBounds.getSize(new THREE.Vector3());
+            const center = localBounds.getCenter(new THREE.Vector3());
+            const pad = 0.06;
+            const boxGeo = new THREE.BoxGeometry(
+                Math.max(0.05, size.x + pad),
+                Math.max(0.05, size.y + pad),
+                Math.max(0.05, size.z + pad)
+            );
+            const edges = new THREE.EdgesGeometry(boxGeo);
+            boxGeo.dispose();
+            const mat = new THREE.LineBasicMaterial({
+                color: 0xff0000,
+                depthTest: false,
+                transparent: true
+            });
+            hoveredVehicleOutline = new THREE.LineSegments(edges, mat);
+            hoveredVehicleOutline.position.copy(center);
+            hoveredVehicleOutline.renderOrder = 10010;
+            hoveredVehicleOutline.frustumCulled = false;
+            // Attach to the vehicle group so the outline yaw/pitch follow the car.
+            vehicleEntity.group.add(hoveredVehicleOutline);
+        }
+
+        function setHoveredVehicleEntity(vehicleEntity, clientX = 0, clientY = 0) {
+            hoveredVehicleEntity = vehicleEntity;
+            updateHoveredVehicleOutline(vehicleEntity);
+            if (!vehicleEntity) {
+                setLiabilityCardVisible(false);
+                return;
+            }
+            liabilityCard.textContent = formatLiabilityText(vehicleEntity);
+            const cardWidth = liabilityCard.offsetWidth || 240;
+            const cardHeight = liabilityCard.offsetHeight || 220;
+            const sideMargin = 28;
+            const left = clientX < window.innerWidth * 0.5
+                ? window.innerWidth - cardWidth - sideMargin
+                : sideMargin;
+            const top = Math.min(window.innerHeight - cardHeight - 20, Math.max(20, clientY - cardHeight / 2));
+            liabilityCard.style.left = `${left}px`;
+            liabilityCard.style.top = `${top}px`;
+            setLiabilityCardVisible(true);
+        }
+
+        function setLiabilityMode(nextMode) {
+            if (!liabilityAvailable) return;
+            if (nextMode && motionMode) setMotionMode(false);
+            liabilityMode = !!nextMode;
+            liabilityBtn.textContent = liabilityMode ? '退出责任' : '责任显示';
+            liabilityBtn.style.backgroundColor = liabilityMode ? '#8e1f1b' : '#d94841';
+            setLiabilityBadgesVisible(liabilityMode);
+            if (!liabilityMode) {
+                setHoveredVehicleEntity(null);
+                setMeasureStatus('已退出责任显示模式。');
+            } else {
+                if (measureMode) exitMeasureMode();
+                setMeasureStatus('责任显示已开启：鼠标悬停车辆可查看该车责任信息。');
+            }
+            updateToolbarButtonsState();
+        }
+
+        function introBlocksUi() {
+            return introState === 'building' || introState === 'settling' || introState === 'waiting';
+        }
+
+        function updateVehicleIdBadgesVisible() {
+            const checkbox = vehicleIdCheckbox || document.getElementById('vehicle-id-checkbox');
+            const show = !!(
+                checkbox
+                && checkbox.checked
+                && !liabilityMode
+                && !measureMode
+                && !motionMode
+                && !introBlocksUi()
+            );
+            vehicleEntities.forEach(vehicleEntity => {
+                if (vehicleEntity.vehicleIdBadge) {
+                    vehicleEntity.vehicleIdBadge.visible = show;
+                }
+            });
+        }
+
+        function updateToolbarButtonsState() {
+            const introBusy = introBlocksUi();
+            const blockBusiness = introBusy || motionMode;
+            if (measureBtn) measureBtn.disabled = blockBusiness || liabilityMode;
+            if (deleteMeasureBtn) {
+                deleteMeasureBtn.disabled = blockBusiness || liabilityMode || selectedMeasurementId === null;
+            }
+            if (resetViewBtn) resetViewBtn.disabled = blockBusiness || liabilityMode;
+            if (saveMeasureBtn) {
+                saveMeasureBtn.disabled = blockBusiness || liabilityMode || saveInProgress;
+            }
+            if (reportBtn) {
+                reportBtn.disabled = introBusy || !liabilityAvailable || liabilityMode || motionMode || measureMode;
+            }
+            if (liabilityBtn) {
+                liabilityBtn.disabled = introBusy || !liabilityAvailable || measureMode || motionMode;
+            }
+            if (motionBtn) {
+                motionBtn.disabled = introBusy || !motionAvailable || liabilityMode || measureMode;
+            }
+            if (motionBar) {
+                const showBar = motionMode && !introBusy;
+                motionBar.classList.toggle('is-visible', showBar);
+                motionBar.setAttribute('aria-hidden', showBar ? 'false' : 'true');
+            }
+            updateVehicleIdBadgesVisible();
+        }
+
+        function updateLiabilityButtonsState() {
+            updateToolbarButtonsState();
+        }
+
+        function normalizeYaw(yaw) {
+            while (yaw > Math.PI) yaw -= Math.PI * 2;
+            while (yaw < -Math.PI) yaw += Math.PI * 2;
+            return yaw;
+        }
+
+        function shortestYawDelta(from, to) {
+            return normalizeYaw(to - from);
+        }
+
+        function motionYawFromDir(dir, drive) {
+            let yaw = Math.atan2(dir.x, dir.z);
+            // G: nose aligns with travel. F: nose opposite travel (rear leads).
+            // Real GF/FG: travel often reverses ~180° while nose barely changes,
+            // because the F offset cancels that travel flip.
+            if (drive === 'F') yaw += Math.PI;
+            return normalizeYaw(yaw);
+        }
+
+        function constrainNoseYaw(previousYaw, targetYaw, movedMeters) {
+            // Constrain the vehicle nose, not path corner angle. Small/medium
+            // heading changes follow the target immediately; only large jumps
+            // (>90°) are eased so the nose never snaps half a turn.
+            if (!Number.isFinite(previousYaw)) return targetYaw;
+            const delta = shortestYawDelta(previousYaw, targetYaw);
+            if (Math.abs(delta) <= Math.PI * 0.5 + 1e-9) return targetYaw;
+            const maxStep = Math.max(0.02, movedMeters) * MOTION_MAX_NOSE_FLIP_RAD_PER_M;
+            if (Math.abs(delta) <= maxStep + 1e-9) return targetYaw;
+            return normalizeYaw(previousYaw + Math.sign(delta) * maxStep);
+        }
+
+        function pushMotionSegment(segments, a, b, drive, totalLengthRef) {
+            const len = a.distanceTo(b);
+            if (len < 1e-9) return totalLengthRef;
+            segments.push({
+                a: a.clone(),
+                b: b.clone(),
+                length: len,
+                start: totalLengthRef,
+                end: totalLengthRef + len,
+                drive: drive === 'F' ? 'F' : 'G'
+            });
+            return totalLengthRef + len;
+        }
+
+        function buildFilletedMotionSegments(rawPoints, rawDrives) {
+            // Convert sharp polyline into straight + circular-fillet arcs (sampled).
+            const segments = [];
+            if (!rawPoints || rawPoints.length < 2) {
+                return { points: rawPoints ? rawPoints.map(p => p.clone()) : [], segments, totalLength: 0 };
+            }
+            const n = rawPoints.length;
+            const outPoints = [rawPoints[0].clone()];
+            let totalLength = 0;
+            let cursor = rawPoints[0].clone();
+            let pendingSegDrive = null;
+
+            const emitPoint = (pt, drive) => {
+                const segDrive = pendingSegDrive || drive;
+                pendingSegDrive = null;
+                totalLength = pushMotionSegment(segments, cursor, pt, segDrive, totalLength);
+                cursor = pt.clone();
+                outPoints.push(pt.clone());
+            };
+
+            for (let i = 1; i < n - 1; i++) {
+                const A = rawPoints[i - 1];
+                const B = rawPoints[i];
+                const C = rawPoints[i + 1];
+                const driveIn = (i - 1 < rawDrives.length) ? rawDrives[i - 1] : 'G';
+                const driveOut = (i < rawDrives.length) ? rawDrives[i] : driveIn;
+
+                // Gear change (G↔F): keep a sharp corner. Filleting would swing the
+                // tangent through a U-turn and falsely rotate the nose; with F the
+                // nose should stay put while travel reverses.
+                if ((driveIn === 'F') !== (driveOut === 'F')) {
+                    emitPoint(B, driveIn);
+                    pendingSegDrive = driveOut;
+                    continue;
+                }
+
+                const dir1 = B.clone().sub(A);
+                const dir2 = C.clone().sub(B);
+                const lenIn = dir1.length();
+                const lenOut = dir2.length();
+                if (lenIn < 1e-6 || lenOut < 1e-6) {
+                    emitPoint(B, driveIn);
+                    continue;
+                }
+                dir1.multiplyScalar(1 / lenIn);
+                dir2.multiplyScalar(1 / lenOut);
+                const dot = Math.max(-1, Math.min(1, dir1.dot(dir2)));
+                const phi = Math.acos(dot);
+                if (phi < MOTION_FILLET_MIN_ANGLE) {
+                    emitPoint(B, driveIn);
+                    continue;
+                }
+
+                const tanHalf = Math.tan(phi * 0.5);
+                if (tanHalf < 1e-6) {
+                    emitPoint(B, driveIn);
+                    continue;
+                }
+                // Prefer target radius, but never shorter than MIN_CUT (segment-capped)
+                // so shallow waypoint bends still get a visible smooth arc.
+                const maxCut = Math.min(0.45 * lenIn, 0.45 * lenOut);
+                const cutDist = Math.min(
+                    maxCut,
+                    Math.max(MOTION_FILLET_TARGET_R * tanHalf, MOTION_FILLET_MIN_CUT_M)
+                );
+                if (cutDist < 0.05) {
+                    emitPoint(B, driveIn);
+                    continue;
+                }
+                const r = cutDist / tanHalf;
+                if (r < 0.05) {
+                    emitPoint(B, driveIn);
+                    continue;
+                }
+
+                const T1 = B.clone().addScaledVector(dir1, -cutDist);
+                const T2 = B.clone().addScaledVector(dir2, cutDist);
+
+                // Center lies on the angle bisector of BA and BC.
+                const u0 = A.clone().sub(B).normalize();
+                const u1 = C.clone().sub(B).normalize();
+                const bis = u0.clone().add(u1);
+                if (bis.lengthSq() < 1e-10) {
+                    emitPoint(B, driveIn);
+                    continue;
+                }
+                bis.normalize();
+                const gamma = Math.acos(Math.max(-1, Math.min(1, u0.dot(u1))));
+                const sinHalf = Math.sin(gamma * 0.5);
+                if (sinHalf < 1e-6) {
+                    emitPoint(B, driveIn);
+                    continue;
+                }
+                const center = B.clone().addScaledVector(bis, r / sinHalf);
+
+                // Emit straight into fillet start.
+                emitPoint(T1, driveIn);
+
+                // Arc sweep equals heading change phi; sign chosen so +Y rotation
+                // carries T1 -> T2 (verified for left/right turns in XZ).
+                const crossY = dir1.x * dir2.z - dir1.z * dir2.x;
+                const sweep = (crossY >= 0 ? -1 : 1) * phi;
+                const v0 = T1.clone().sub(center);
+                const arcLen = Math.abs(sweep) * r;
+                const steps = Math.max(2, Math.ceil(arcLen / MOTION_FILLET_ARC_STEP_M));
+                for (let s = 1; s <= steps; s++) {
+                    const t = s / steps;
+                    const ang = sweep * t;
+                    const c = Math.cos(ang);
+                    const sn = Math.sin(ang);
+                    // Rotate v0 around +Y by ang (right-handed).
+                    const vx = v0.x * c + v0.z * sn;
+                    const vz = -v0.x * sn + v0.z * c;
+                    const p = new THREE.Vector3(center.x + vx, 0, center.z + vz);
+                    emitPoint(p, driveIn);
+                }
+                // Ensure we land exactly on T2 (last arc sample may drift slightly).
+                if (cursor.distanceToSquared(T2) > 1e-8) {
+                    emitPoint(T2, driveIn);
+                }
+            }
+
+            // Final leg to rest position.
+            const lastDrive = rawDrives.length
+                ? rawDrives[rawDrives.length - 1]
+                : 'G';
+            emitPoint(rawPoints[n - 1], lastDrive);
+
+            return { points: outPoints, segments, totalLength };
+        }
+
+        function buildMotionPolyline(vehicleEntity) {
+            const config = vehicleEntity && vehicleEntity.config;
+            if (!config) return null;
+            const raw = Array.isArray(config.motionPath) ? config.motionPath : [];
+            const points = [];
+            const drives = [];
+            raw.forEach(pt => {
+                const x = Number(pt && pt.x);
+                const z = Number(pt && pt.z);
+                if (Number.isFinite(x) && Number.isFinite(z)) {
+                    points.push(new THREE.Vector3(x, 0, z));
+                    const driveRaw = String((pt && pt.drive) || 'G').trim().toUpperCase();
+                    drives.push(driveRaw === 'F' ? 'F' : 'G');
+                }
+            });
+            if (!points.length) return null;
+            const end = new THREE.Vector3(
+                Number(config.position && config.position.x) || 0,
+                0,
+                Number(config.position && config.position.z) || 0
+            );
+            points.push(end);
+            // Final leg drive inherits the last user path point's drive (or G).
+            while (drives.length < points.length - 1) {
+                drives.push(drives.length ? drives[drives.length - 1] : 'G');
+            }
+
+            const smoothed = buildFilletedMotionSegments(points, drives);
+            const speedKmh = Math.max(1, Number(config.motionSpeedKmh) || 80);
+            const baseSpeedMps = (speedKmh / 3.6) * playbackSpeedFactor;
+            const travelSeconds = baseSpeedMps > 1e-9 ? smoothed.totalLength / baseSpeedMps : 0;
+
+            return {
+                vehicleEntity,
+                points: smoothed.points,
+                segments: smoothed.segments,
+                totalLength: smoothed.totalLength,
+                baseSpeedMps,
+                travelSeconds,
+                restPosition: end.clone(),
+                restYaw: Number(config.rotation && config.rotation.y) || 0
+            };
+        }
+
+        function sampleMotionPose(track, travelDistance) {
+            const dist = Math.max(0, Math.min(track.totalLength, travelDistance));
+            if (track.totalLength <= 1e-6 || track.segments.length === 0) {
+                return {
+                    position: track.restPosition.clone(),
+                    yaw: track.restYaw
+                };
+            }
+            if (dist >= track.totalLength - 1e-6) {
+                return {
+                    position: track.restPosition.clone(),
+                    yaw: track.restYaw
+                };
+            }
+            let segIndex = track.segments.length - 1;
+            for (let i = 0; i < track.segments.length; i++) {
+                if (dist <= track.segments[i].end + 1e-9) {
+                    segIndex = i;
+                    break;
+                }
+            }
+            const seg = track.segments[segIndex];
+            const local = seg.length > 1e-9 ? (dist - seg.start) / seg.length : 1;
+            const position = seg.a.clone().lerp(seg.b, Math.max(0, Math.min(1, local)));
+            const currentDir = seg.b.clone().sub(seg.a);
+            let yaw = track.restYaw;
+            if (currentDir.lengthSq() >= 1e-8) {
+                // Nose from travel tangent + G/F. GF/FG with reversed travel keeps
+                // nose nearly unchanged; path corner angle is not the constraint.
+                yaw = motionYawFromDir(currentDir, seg.drive || 'G');
+            }
+            // Path tangent at the stop often differs from the annotated box heading.
+            // Blend toward restYaw over the last stretch so the final pose matches
+            // without an end-frame snap.
+            const lastSeg = track.segments[track.segments.length - 1];
+            const blendLen = Math.max(
+                0.5,
+                Math.min(
+                    MOTION_REST_ALIGN_M,
+                    lastSeg && lastSeg.length > 1e-6 ? lastSeg.length : MOTION_REST_ALIGN_M,
+                    track.totalLength * 0.5
+                )
+            );
+            const remaining = track.totalLength - dist;
+            if (remaining <= blendLen) {
+                const t = Math.max(0, Math.min(1, 1 - remaining / blendLen));
+                const s = t * t * (3 - 2 * t);
+                yaw = yaw + shortestYawDelta(yaw, track.restYaw) * s;
+            }
+            return { position, yaw: normalizeYaw(yaw) };
+        }
+
+        function setMotionMarkersVisible(visible) {
+            markerEntities.forEach(entity => {
+                if (!entity || !entity.group) return;
+                if (entity.hideDuringMotion || (entity.group.userData && entity.group.userData.hideDuringMotion)) {
+                    entity.group.visible = !!visible;
+                }
+            });
+        }
+
+        function syncMotionBarUi() {
+            if (motionPlayBtn) {
+                motionPlayBtn.textContent = motionPlaying ? '❚❚' : '▶';
+            }
+            if (motionSpeedBtn) {
+                motionSpeedBtn.textContent = `${MOTION_SPEED_STEPS[motionSpeedIndex]}X`;
+            }
+            if (motionProgress && motionDuration > 1e-9) {
+                const ratio = Math.max(0, Math.min(1, motionTime / motionDuration));
+                motionProgress.value = String(Math.round(ratio * 1000));
+            } else if (motionProgress) {
+                motionProgress.value = '0';
+            }
+        }
+
+        function applyMotionTime(timeSeconds, options) {
+            const opts = options || {};
+            // Scrubbing / seek: use absolute G/F nose. Sequential play: ease only
+            // nose-flip jumps (>90°) so the hood never snaps half a turn.
+            const forceYaw = !!opts.forceYaw;
+            // motionTime / motionDuration are travel-only; hold is handled separately.
+            motionTime = Math.max(0, Math.min(motionDuration, timeSeconds));
+            motionTracks.forEach(track => {
+                const group = track.vehicleEntity.group;
+                if (!group) return;
+                if (motionTime <= 1e-9) {
+                    const start = track.points[0];
+                    group.position.set(start.x, group.position.y, start.z);
+                    let yaw = track.restYaw;
+                    if (track.segments.length > 0) {
+                        const d = track.segments[0].b.clone().sub(track.segments[0].a);
+                        if (d.lengthSq() > 1e-8) {
+                            yaw = motionYawFromDir(d, track.segments[0].drive || 'G');
+                        }
+                    }
+                    group.rotation.y = yaw;
+                    track._lastYaw = yaw;
+                    track._lastTravel = 0;
+                    return;
+                }
+                const travelDist = Math.min(track.totalLength, motionTime * track.baseSpeedMps);
+                const atEnd = travelDist >= track.totalLength - 1e-6;
+                const pose = sampleMotionPose(track, travelDist);
+                group.position.set(pose.position.x, group.position.y, pose.position.z);
+                // pose.yaw already eases to restYaw on the final stretch; atEnd is exact.
+                let yaw;
+                if (atEnd || forceYaw) {
+                    yaw = pose.yaw;
+                } else {
+                    const moved = Math.max(0, travelDist - (track._lastTravel || 0));
+                    yaw = constrainNoseYaw(track._lastYaw, pose.yaw, moved);
+                }
+                group.rotation.y = yaw;
+                track._lastYaw = yaw;
+                track._lastTravel = travelDist;
+            });
+            const finished = motionTime >= motionDuration - 1e-6;
+            setMotionMarkersVisible(finished);
+            syncMotionBarUi();
+        }
+
+        function rebuildMotionTracks() {
+            motionTracks = [];
+            vehicleEntities.forEach(entity => {
+                const track = buildMotionPolyline(entity);
+                if (track) motionTracks.push(track);
+            });
+            motionAvailable = motionTracks.length > 0;
+            motionDuration = 0;
+            motionTracks.forEach(track => {
+                motionDuration = Math.max(motionDuration, track.travelSeconds);
+            });
+            if (motionBtn) {
+                motionBtn.title = motionAvailable
+                    ? '播放车辆运动路径'
+                    : '尚未设置任何车辆路径';
+            }
+            updateToolbarButtonsState();
+        }
+
+        function resetVehiclesToRestPose() {
+            vehicleEntities.forEach(entity => {
+                const config = entity.config || {};
+                const pos = config.position || {};
+                const rot = config.rotation || {};
+                if (entity.group) {
+                    entity.group.position.set(
+                        Number(pos.x) || 0,
+                        Number(pos.y) || 0,
+                        Number(pos.z) || 0
+                    );
+                    entity.group.rotation.set(
+                        Number(rot.x) || 0,
+                        Number(rot.y) || 0,
+                        Number(rot.z) || 0
+                    );
+                }
+            });
+            setMotionMarkersVisible(true);
+        }
+
+        function setMotionMode(nextMode) {
+            const want = !!nextMode;
+            if (want === motionMode) return;
+            if (want) {
+                if (!motionAvailable || introBlocksUi()) return;
+                if (liabilityMode) setLiabilityMode(false);
+                if (measureMode) exitMeasureMode();
+                measureLayer.visible = false;
+                setLiabilityBadgesVisible(false);
+                setHoveredVehicleEntity(null);
+                motionMode = true;
+                motionPlaying = false;
+                motionHolding = false;
+                motionHoldElapsed = 0;
+                motionTime = 0;
+                motionLastFrameTime = performance.now();
+                motionTracks.forEach(track => {
+                    track._lastYaw = undefined;
+                    track._lastTravel = 0;
+                });
+                applyMotionTime(0, { forceYaw: true });
+                setMotionMarkersVisible(false);
+                if (motionBtn) {
+                    motionBtn.textContent = '退出运动';
+                    motionBtn.style.backgroundColor = '#0f766e';
+                }
+                setMeasureStatus('运动播放模式：可播放/暂停、拖动进度条跳转；再点「播放运动」退出。');
+            } else {
+                motionMode = false;
+                motionPlaying = false;
+                motionHolding = false;
+                motionHoldElapsed = 0;
+                motionTime = 0;
+                measureLayer.visible = true;
+                resetVehiclesToRestPose();
+                if (motionBtn) {
+                    motionBtn.textContent = '播放运动';
+                    motionBtn.style.backgroundColor = '#0d9488';
+                }
+                setMeasureStatus('已退出运动播放。');
+            }
+            syncMotionBarUi();
+            updateToolbarButtonsState();
+        }
+
+        function updateMotionPlayback() {
+            if (!motionMode || !motionPlaying) return;
+            const now = performance.now();
+            const dt = Math.min(0.1, Math.max(0, (now - motionLastFrameTime) / 1000));
+            motionLastFrameTime = now;
+            // Hold uses wall-clock time (not speed multiplier) so playback always
+            // waits MOTION_HOLD_SECONDS before travel begins; progress stays at 0.
+            if (motionHolding) {
+                motionHoldElapsed += dt;
+                applyMotionTime(0, { forceYaw: true });
+                if (motionHoldElapsed < MOTION_HOLD_SECONDS) {
+                    return;
+                }
+                motionHolding = false;
+                motionHoldElapsed = 0;
+            }
+            const mul = MOTION_SPEED_STEPS[motionSpeedIndex] || 1;
+            const next = motionTime + dt * mul;
+            applyMotionTime(next);
+            if (motionTime >= motionDuration - 1e-6) {
+                motionPlaying = false;
+                motionHolding = false;
+                syncMotionBarUi();
+            }
+        }
+
+        rebuildMotionTracks();
+        updateToolbarButtonsState();
+        whenVehicleModelsReady(function () {
+            rebuildMotionTracks();
+            updateToolbarButtonsState();
+        });
+
+        // Skip intro orbit instantly on any left click while building/settling.
+        document.addEventListener('mousedown', (event) => {
+            if (event.button !== 0) return;
+            if (introState === 'building' || introState === 'settling') {
+                finishIntroModeling();
+                updateToolbarButtonsState();
+            }
+        }, true);
+
+        // Disable business buttons while waiting for intro start as well.
+        if (typeof whenVehicleModelsReady === 'function') {
+            whenVehicleModelsReady(function () {
+                updateToolbarButtonsState();
+            });
+        } else {
+            updateToolbarButtonsState();
+        }
+
+        if (motionBtn) {
+            motionBtn.addEventListener('click', () => {
+                if (introBlocksUi()) return;
+                setMotionMode(!motionMode);
+            });
+        }
+        if (motionPlayBtn) {
+            motionPlayBtn.addEventListener('click', () => {
+                if (!motionMode) return;
+                motionPlaying = !motionPlaying;
+                motionLastFrameTime = performance.now();
+                if (motionPlaying) {
+                    if (motionTime >= motionDuration - 1e-6) {
+                        applyMotionTime(0, { forceYaw: true });
+                        setMotionMarkersVisible(false);
+                        motionHolding = true;
+                        motionHoldElapsed = 0;
+                    } else if (motionTime <= 1e-9) {
+                        // From the start: wait hold, then travel. Progress stays 0 during hold.
+                        applyMotionTime(0, { forceYaw: true });
+                        setMotionMarkersVisible(false);
+                        motionHolding = true;
+                        motionHoldElapsed = 0;
+                    } else {
+                        // Resume mid-path: no hold.
+                        motionHolding = false;
+                        motionHoldElapsed = 0;
+                    }
+                } else {
+                    motionHolding = false;
+                }
+                syncMotionBarUi();
+            });
+        }
+        if (motionSpeedBtn) {
+            motionSpeedBtn.addEventListener('click', () => {
+                if (!motionMode) return;
+                motionSpeedIndex = (motionSpeedIndex + 1) % MOTION_SPEED_STEPS.length;
+                syncMotionBarUi();
+            });
+        }
+        if (motionProgress) {
+            motionProgress.addEventListener('input', () => {
+                if (!motionMode) return;
+                motionPlaying = false;
+                motionHolding = false;
+                motionHoldElapsed = 0;
+                const ratio = Number(motionProgress.value) / 1000;
+                applyMotionTime(ratio * motionDuration, { forceYaw: true });
+                syncMotionBarUi();
+            });
+        }
+
+        function escapeHtml(text) {
+            return String(text == null ? '' : text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function openReportModal() {
+            if (!liabilityAvailable) return;
+            const analysis = runtimeConfig.liabilityAnalysis || {};
+            const response = analysis.response || {};
+            const experts = Array.isArray(analysis.experts) ? analysis.experts : [];
+            const speeches = Array.isArray(response.expertSpeeches) ? response.expertSpeeches : [];
+            const speechById = {};
+            const speechByName = {};
+            speeches.forEach((item) => {
+                if (!item || typeof item !== 'object') return;
+                if (item.expertId) speechById[String(item.expertId)] = item;
+                if (item.expertName) speechByName[String(item.expertName)] = item;
+            });
+            const cards = [];
+            if (experts.length > 0) {
+                experts.forEach((expert) => {
+                    const speechItem = speechById[String(expert.id || '')]
+                        || speechByName[String(expert.name || '')]
+                        || {};
+                    const speech = String(speechItem.speech || '').trim() || '暂无发言';
+                    const avatar = String(expert.avatarDataUrl || '').trim();
+                    const avatarHtml = avatar
+                        ? `<img class="report-expert-avatar" src="${escapeHtml(avatar)}" alt="">`
+                        : `<div class="report-expert-avatar" style="display:flex;align-items:center;justify-content:center;font-size:28px;color:#777;">?</div>`;
+                    cards.push([
+                        '<div class="report-expert-card">',
+                        avatarHtml,
+                        '<div>',
+                        `<div class="report-expert-name">${escapeHtml(expert.name || '专家')}</div>`,
+                        `<pre class="report-expert-speech">${escapeHtml(speech)}</pre>`,
+                        '</div>',
+                        '</div>'
+                    ].join(''));
+                });
+            } else if (speeches.length > 0) {
+                speeches.forEach((item) => {
+                    cards.push([
+                        '<div class="report-expert-card">',
+                        '<div class="report-expert-avatar" style="display:flex;align-items:center;justify-content:center;font-size:28px;color:#777;">?</div>',
+                        '<div>',
+                        `<div class="report-expert-name">${escapeHtml(item.expertName || item.expertId || '专家')}</div>`,
+                        `<pre class="report-expert-speech">${escapeHtml(item.speech || '暂无发言')}</pre>`,
+                        '</div>',
+                        '</div>'
+                    ].join(''));
+                });
+            }
+            if (!reportExpertList) return;
+            reportExpertList.innerHTML = cards.length > 0
+                ? cards.join('')
+                : '<div class="report-expert-empty">暂无专家发言。请确认已启用 AI 分析并重新生成报告。</div>';
+            reportModal.classList.add('is-visible');
+            reportModal.setAttribute('aria-hidden', 'false');
+        }
+
+        function closeReportModal() {
+            reportModal.classList.remove('is-visible');
+            reportModal.setAttribute('aria-hidden', 'true');
+        }
+
+        function getSaveServiceUrls() {
+            return Array.from(new Set([
+                runtimeConfig.saveMeasurementsUrl,
+                DEFAULT_SAVE_MEASUREMENTS_URL
+            ].filter(Boolean)));
+        }
+
+        function getHealthUrl(saveUrl) {
+            return saveUrl.replace(/\/save-measurements\/?$/, '/health');
+        }
+
+        async function ensureSaveServiceAvailable(showAlert = true) {
+            const urls = getSaveServiceUrls();
+            for (const saveUrl of urls) {
+                try {
+                    const response = await fetch(getHealthUrl(saveUrl), {
+                        method: 'GET',
+                        cache: 'no-store'
+                    });
+                    if (response.ok) {
+                        activeSaveMeasurementsUrl = saveUrl;
+                        return true;
+                    }
+                } catch (error) {
+                    // Try the next known service URL.
+                }
+            }
+            if (showAlert) alert(SERVICE_REQUIRED_MESSAGE);
+            setMeasureStatus(SERVICE_REQUIRED_MESSAGE);
+            return false;
+        }
+
+        function isOrthogonalLockActive() {
+            return !!(orthogonalLockCheckbox && orthogonalLockCheckbox.checked);
+        }
+
+        function isMagneticSnapActive() {
+            return !!(magneticSnapCheckbox && magneticSnapCheckbox.checked);
+        }
+
+        const SNAP_RADIUS = 1.5;
+        const SNAP_RADIUS_SQ = SNAP_RADIUS * SNAP_RADIUS;
+
+        function distSq2D(ax, az, bx, bz) {
+            const dx = ax - bx;
+            const dz = az - bz;
+            return dx * dx + dz * dz;
+        }
+
+        function cross2D(ax, az, bx, bz) {
+            return ax * bz - az * bx;
+        }
+
+        function nearestPointOnSegment(px, pz, ax, az, bx, bz) {
+            const abx = bx - ax;
+            const abz = bz - az;
+            const lenSq = abx * abx + abz * abz;
+            if (lenSq <= 1e-8) {
+                return { x: ax, z: az, t: 0 };
+            }
+            let t = ((px - ax) * abx + (pz - az) * abz) / lenSq;
+            if (t < 0) t = 0;
+            else if (t > 1) t = 1;
+            return { x: ax + abx * t, z: az + abz * t, t };
+        }
+
+        function findFreeSnap(rawX, rawZ) {
+            let bestDistSq = SNAP_RADIUS_SQ;
+            let best = null;
+            for (let i = 0; i < snapPoints.length; i++) {
+                const p = snapPoints[i];
+                const d = distSq2D(rawX, rawZ, p.x, p.z);
+                if (d < bestDistSq) {
+                    bestDistSq = d;
+                    best = { x: p.x, z: p.z };
+                }
+            }
+            for (let i = 0; i < snapLines.length; i++) {
+                const seg = snapLines[i];
+                const near = nearestPointOnSegment(rawX, rawZ, seg.ax, seg.az, seg.bx, seg.bz);
+                const d = distSq2D(rawX, rawZ, near.x, near.z);
+                if (d < bestDistSq) {
+                    bestDistSq = d;
+                    best = { x: near.x, z: near.z };
+                }
+            }
+            return best;
+        }
+
+        function getNearestSnapLineReference(rawX, rawZ) {
+            let bestDistSq = Infinity;
+            let best = null;
+            for (let i = 0; i < snapLines.length; i++) {
+                const seg = snapLines[i];
+                const dirX = seg.bx - seg.ax;
+                const dirZ = seg.bz - seg.az;
+                const length = Math.sqrt(dirX * dirX + dirZ * dirZ);
+                if (length <= 1e-6) continue;
+                const near = nearestPointOnSegment(rawX, rawZ, seg.ax, seg.az, seg.bx, seg.bz);
+                const d = distSq2D(rawX, rawZ, near.x, near.z);
+                if (d < bestDistSq) {
+                    bestDistSq = d;
+                    best = {
+                        x: dirX / length,
+                        z: dirZ / length
+                    };
+                }
+            }
+            return best;
+        }
+
+        function getOrthogonalConstraint(start, rawEnd) {
+            if (!isOrthogonalLockActive() || !start) return null;
+            const referenceDirection = getNearestSnapLineReference(rawEnd.x, rawEnd.z);
+            if (!referenceDirection) return null;
+            const normalDirection = { x: -referenceDirection.z, z: referenceDirection.x };
+            const rawDx = rawEnd.x - start.x;
+            const rawDz = rawEnd.z - start.z;
+            const parallelProjection = rawDx * referenceDirection.x + rawDz * referenceDirection.z;
+            const perpendicularProjection = rawDx * normalDirection.x + rawDz * normalDirection.z;
+            const lockDirection = Math.abs(parallelProjection) >= Math.abs(perpendicularProjection)
+                ? referenceDirection
+                : normalDirection;
+            const projection = rawDx * lockDirection.x + rawDz * lockDirection.z;
+            const constrainedEnd = rawEnd.clone();
+            constrainedEnd.x = start.x + lockDirection.x * projection;
+            constrainedEnd.z = start.z + lockDirection.z * projection;
+            return {
+                constrainedEnd,
+                referenceDirection,
+                lockDirection
+            };
+        }
+
+        function findOrthoSnap(start, constrainedEnd, lockDirection) {
+            if (!lockDirection) return null;
+            const sx = start.x;
+            const sz = start.z;
+            const dirX = lockDirection.x;
+            const dirZ = lockDirection.z;
+            let bestDistSq = SNAP_RADIUS_SQ;
+            let best = null;
+
+            for (let i = 0; i < snapPoints.length; i++) {
+                const p = snapPoints[i];
+                const offsetX = p.x - sx;
+                const offsetZ = p.z - sz;
+                const lateral = Math.abs(cross2D(offsetX, offsetZ, dirX, dirZ));
+                if (lateral > SNAP_RADIUS) continue;
+                const t = offsetX * dirX + offsetZ * dirZ;
+                const candX = sx + dirX * t;
+                const candZ = sz + dirZ * t;
+                const d = distSq2D(constrainedEnd.x, constrainedEnd.z, candX, candZ);
+                if (d < bestDistSq) {
+                    bestDistSq = d;
+                    best = { x: candX, z: candZ };
+                }
+            }
+
+            for (let i = 0; i < snapLines.length; i++) {
+                const seg = snapLines[i];
+                const segDirX = seg.bx - seg.ax;
+                const segDirZ = seg.bz - seg.az;
+                const denom = cross2D(dirX, dirZ, segDirX, segDirZ);
+                if (Math.abs(denom) <= 1e-6) {
+                    const lateral = Math.abs(cross2D(seg.ax - sx, seg.az - sz, dirX, dirZ));
+                    if (lateral > SNAP_RADIUS) continue;
+                    const near = nearestPointOnSegment(constrainedEnd.x, constrainedEnd.z, seg.ax, seg.az, seg.bx, seg.bz);
+                    const t = (near.x - sx) * dirX + (near.z - sz) * dirZ;
+                    const candX = sx + dirX * t;
+                    const candZ = sz + dirZ * t;
+                    const d = distSq2D(constrainedEnd.x, constrainedEnd.z, candX, candZ);
+                    if (d < bestDistSq) {
+                        bestDistSq = d;
+                        best = { x: candX, z: candZ };
+                    }
+                } else {
+                    const relX = seg.ax - sx;
+                    const relZ = seg.az - sz;
+                    const t = cross2D(relX, relZ, segDirX, segDirZ) / denom;
+                    const u = cross2D(relX, relZ, dirX, dirZ) / denom;
+                    if (u < 0 || u > 1) continue;
+                    const candX = sx + dirX * t;
+                    const candZ = sz + dirZ * t;
+                    const d = distSq2D(constrainedEnd.x, constrainedEnd.z, candX, candZ);
+                    if (d < bestDistSq) {
+                        bestDistSq = d;
+                        best = { x: candX, z: candZ };
+                    }
+                }
+            }
+            return best;
+        }
+
+        function snapStartPoint(rawPoint) {
+            if (!isMagneticSnapActive() || !rawPoint) return rawPoint;
+            const hit = findFreeSnap(rawPoint.x, rawPoint.z);
+            if (!hit) return rawPoint;
+            const p = rawPoint.clone();
+            p.x = hit.x;
+            p.z = hit.z;
+            return p;
+        }
+
+        function resolveEndPoint(start, rawEnd) {
+            if (!rawEnd) return { point: rawEnd, referenceDirection: null };
+            const orthogonalConstraint = isOrthogonalLockActive() && start
+                ? getOrthogonalConstraint(start, rawEnd)
+                : null;
+            const constrained = orthogonalConstraint ? orthogonalConstraint.constrainedEnd : rawEnd;
+            if (!isMagneticSnapActive() || !start) {
+                return {
+                    point: constrained,
+                    referenceDirection: orthogonalConstraint ? orthogonalConstraint.referenceDirection : null
+                };
+            }
+            const hit = orthogonalConstraint
+                ? findOrthoSnap(start, constrained, orthogonalConstraint.lockDirection)
+                : findFreeSnap(constrained.x, constrained.z);
+            if (!hit) {
+                return {
+                    point: constrained,
+                    referenceDirection: orthogonalConstraint ? orthogonalConstraint.referenceDirection : null
+                };
+            }
+            const p = constrained.clone();
+            p.x = hit.x;
+            p.z = hit.z;
+            return {
+                point: p,
+                referenceDirection: orthogonalConstraint ? orthogonalConstraint.referenceDirection : null
+            };
+        }
+
+        measureBtn.addEventListener('click', async () => {
+            if (motionMode) setMotionMode(false);
+            if (liabilityMode) setLiabilityMode(false);
+            if (!measureMode && !(await ensureSaveServiceAvailable())) return;
+            measureMode = !measureMode;
+            if (measureMode) {
+                measureBtn.innerText = '取消测量';
+                measureBtn.style.backgroundColor = '#dc3545';
+                renderer.domElement.style.cursor = 'crosshair';
+                renderer.domElement.tabIndex = 0;
+                renderer.domElement.focus();
+                controls.enabled = false;
+                setMeasureStatus('点击路面确定起点，再移动鼠标预览距离和夹角；可勾选右下角“锁定直角”或“磁吸模式”辅助对齐。');
+            } else {
+                exitMeasureMode();
+            }
+            updateToolbarButtonsState();
+        });
+
+        deleteMeasureBtn.addEventListener('click', async () => {
+            if (selectedMeasurementId !== null) {
+                if (!(await ensureSaveServiceAvailable())) return;
+                deleteMeasurement(selectedMeasurementId);
+            }
+        });
+
+        saveMeasureBtn.addEventListener('click', saveMeasurements);
+        liabilityBtn.addEventListener('click', () => setLiabilityMode(!liabilityMode));
+        if (vehicleIdCheckbox) {
+            vehicleIdCheckbox.addEventListener('change', () => {
+                updateVehicleIdBadgesVisible();
+            });
+        }
+        reportBtn.addEventListener('click', openReportModal);
+        reportCloseBtn.addEventListener('click', closeReportModal);
+        reportModal.addEventListener('click', (event) => {
+            if (event.target === reportModal) closeReportModal();
+        });
+
+        resetViewBtn.addEventListener('click', () => {
+            activePanKeys.clear();
+            camera.position.copy(initialCameraPosition);
+            controls.target.copy(initialControlsTarget);
+            camera.up.set(0, 1, 0);
+            controls.update();
+            setMeasureStatus('视角已复位到初始位置。');
+        });
+
+        function setMeasureStatus(text) {
+            measureStatus.textContent = text;
+        }
+
+        function getPreviewStatusText() {
+            const lockOn = isOrthogonalLockActive();
+            const snapOn = isMagneticSnapActive();
+            if (lockOn && snapOn) {
+                return '“锁定直角 + 磁吸”已开启：终点自动吸附到延长线上最近的轮胎/标记/道路线。';
+            }
+            if (lockOn) {
+                return '“锁定直角”已开启：终点自动吸附到相对车道线 0°/90° 方向。';
+            }
+            if (snapOn) {
+                return '“磁吸模式”已开启：终点自动吸附到最近的轮胎/标记/道路线。';
+            }
+            return '虚线预览正在更新，距离和夹角显示在线旁；可勾选右下角“锁定直角”强制相对车道线 0°/90°。';
+        }
+
+        function getGroundPoint(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObject(ground);
+            if (intersects.length === 0) return null;
+            const point = intersects[0].point.clone();
+            point.y = measureVisualY;
+            return point;
+        }
+
+        function getConstrainedEndPoint(start, rawEnd) {
+            const orthogonalConstraint = getOrthogonalConstraint(start, rawEnd);
+            return orthogonalConstraint ? orthogonalConstraint.constrainedEnd : rawEnd;
+        }
+
+        function exitMeasureMode() {
+            measureMode = false;
+            measureBtn.innerText = '测量距离';
+            measureBtn.style.backgroundColor = '#28a745';
+            renderer.domElement.style.cursor = 'default';
+            controls.enabled = true;
+            measureStart = null;
+            clearPreviewMeasurement();
+            setMeasureStatus('点击“测量距离”后，在路面点击两点添加测量线；可勾选“锁定直角”强制相对车道线 0°/90° 方向，勾选“磁吸模式”自动吸附到轮胎/标记/道路线。');
+            updateLiabilityButtonsState();
+        }
+
+        function disposeObject(object) {
+            object.traverse(child => {
+                if (child.geometry) child.geometry.dispose();
+                if (child.material) {
+                    if (child.material.map) child.material.map.dispose();
+                    child.material.dispose();
+                }
+            });
+        }
+
+        function clearPreviewMeasurement() {
+            if (!previewMeasurement) return;
+            removePickablesForGroup(previewMeasurement.group);
+            measureLayer.remove(previewMeasurement.group);
+            disposeObject(previewMeasurement.group);
+            previewMeasurement = null;
+            previewDashLine = null;
+        }
+
+        function makePoint(point) {
+            return new THREE.Vector3(Number(point.x), measureVisualY, Number(point.z));
+        }
+
+        function getMeasureInfo(start, end, referenceDirection = null) {
+            const dx = end.x - start.x;
+            const dz = end.z - start.z;
+            const distance = Math.sqrt(dx * dx + dz * dz);
+            let angle = distance > 0 ? Math.acos(Math.min(1, Math.abs(dz) / distance)) * 180 / Math.PI : 0;
+            if (referenceDirection && distance > 0) {
+                const refLength = Math.sqrt(referenceDirection.x * referenceDirection.x + referenceDirection.z * referenceDirection.z);
+                if (refLength > 1e-6) {
+                    const dot = dx * (referenceDirection.x / refLength) + dz * (referenceDirection.z / refLength);
+                    const cosine = Math.max(0, Math.min(1, Math.abs(dot) / distance));
+                    angle = Math.acos(cosine) * 180 / Math.PI;
+                }
+            }
+            return { dx, dz, distance, angle };
+        }
+
+        function createLineMaterial(color, dashed) {
+            const MaterialClass = dashed ? THREE.LineDashedMaterial : THREE.LineBasicMaterial;
+            const options = {
+                color,
+                depthTest: false,
+                depthWrite: false,
+                transparent: true,
+                opacity: dashed ? 0.85 : 1
+            };
+            if (dashed) {
+                options.dashSize = 0.12;
+                options.gapSize = 0.08;
+                options.scale = 1;
+            }
+            return new MaterialClass(options);
+        }
+
+        function updatePreviewDashBreath() {
+            if (!previewDashLine || !previewDashLine.material) return;
+            const breath = 0.55 + 0.3 * Math.sin(performance.now() * 0.0022);
+            previewDashLine.material.opacity = breath;
+        }
+
+        function createTextTexture(text, color) {
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            const fontSize = 42;
+            context.font = `bold ${fontSize}px sans-serif`;
+            const width = Math.ceil(context.measureText(text).width + 20);
+            const height = 64;
+            canvas.width = width;
+            canvas.height = height;
+            context.font = `bold ${fontSize}px sans-serif`;
+            context.textAlign = 'center';
+            context.textBaseline = 'bottom';
+            context.lineWidth = 6;
+            context.strokeStyle = 'rgba(0, 0, 0, 0.7)';
+            context.strokeText(text, width / 2, height - 6);
+            context.fillStyle = color;
+            context.fillText(text, width / 2, height - 6);
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.minFilter = THREE.LinearFilter;
+            texture.needsUpdate = true;
+            return { texture, width, height };
+        }
+
+        function createMeasureLabel(text, start, end, color) {
+            const info = getMeasureInfo(start, end);
+            const labelData = createTextTexture(text, color);
+            const worldWidth = Math.max(2.0, labelData.width / 110);
+            const worldHeight = labelData.height / 110;
+            const material = new THREE.MeshBasicMaterial({
+                map: labelData.texture,
+                transparent: true,
+                depthTest: false,
+                depthWrite: false,
+                side: THREE.DoubleSide
+            });
+            const mesh = new THREE.Mesh(new THREE.PlaneGeometry(worldWidth, worldHeight), material);
+
+            // Keep the label flat on the ground and always parallel to the measure
+            // line (like text sitting on an underline). Avoid Euler XYZ composition
+            // of rotation.x + rotation.z, which tilts the plane and makes text cross the line.
+            let angle = Math.atan2(info.dz, info.dx);
+            if (angle > Math.PI / 2 || angle <= -Math.PI / 2) {
+                angle += Math.PI;
+            }
+            const xAxis = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
+            const zAxis = new THREE.Vector3(0, 1, 0);
+            const yAxis = new THREE.Vector3().crossVectors(zAxis, xAxis).normalize();
+            const mid = new THREE.Vector3(
+                (start.x + end.x) / 2,
+                measureVisualY + 0.06,
+                (start.z + end.z) / 2
+            );
+            // Text is drawn near the canvas bottom (local -Y); rest that edge on the line.
+            mesh.position.copy(mid).addScaledVector(yAxis, -(worldHeight / 2 + 0.04));
+            mesh.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(xAxis, yAxis, zAxis));
+            mesh.renderOrder = 10002;
+            return mesh;
+        }
+
+        function createMarker(point, color) {
+            const marker = new THREE.Mesh(
+                new THREE.CircleGeometry(0.18, 24),
+                new THREE.MeshBasicMaterial({
+                    color,
+                    depthTest: false,
+                    depthWrite: false,
+                    side: THREE.DoubleSide
+                })
+            );
+            marker.rotation.x = -Math.PI / 2;
+            marker.position.copy(point);
+            marker.position.y = measureVisualY + 0.02;
+            marker.renderOrder = 10001;
+            return marker;
+        }
+
+        function buildMeasurementVisual(measurement, dashed, selected) {
+            const start = makePoint(measurement.start);
+            const end = makePoint(measurement.end);
+            const color = dashed ? previewMeasureColor : (selected ? selectedMeasureColor : measureColor);
+            const group = new THREE.Group();
+            group.renderOrder = 10000;
+            group.userData.measurementId = measurement.id;
+
+            const geometry = new THREE.BufferGeometry().setFromPoints([start, end]);
+            const line = new THREE.Line(geometry, createLineMaterial(color, dashed));
+            line.userData.measurementId = measurement.id;
+            line.renderOrder = 10000;
+            if (dashed) {
+                line.computeLineDistances();
+                previewDashLine = line;
+            }
+            group.add(line);
+            measurePickables.push(line);
+
+            const startMarker = createMarker(start, color);
+            const endMarker = createMarker(end, color);
+            startMarker.userData.measurementId = measurement.id;
+            endMarker.userData.measurementId = measurement.id;
+            group.add(startMarker, endMarker);
+            measurePickables.push(startMarker, endMarker);
+
+            const info = getMeasureInfo(start, end, measurement.referenceDirection || null);
+            const text = dashed
+                ? `${info.distance.toFixed(2)} m  夹角 ${info.angle.toFixed(1)}°`
+                : `${info.distance.toFixed(2)} m`;
+            const label = createMeasureLabel(text, start, end, selected ? '#ffff00' : '#00ff00');
+            label.userData.measurementId = measurement.id;
+            group.add(label);
+            measurePickables.push(label);
+
+            return group;
+        }
+
+        function removePickablesForGroup(group) {
+            for (let i = measurePickables.length - 1; i >= 0; i--) {
+                if (group.children.includes(measurePickables[i])) {
+                    measurePickables.splice(i, 1);
+                }
+            }
+        }
+
+        function addMeasurement(start, end, id, referenceDirection = null) {
+            const info = getMeasureInfo(start, end, referenceDirection);
+            if (info.distance < 0.05) return null;
+            const measurement = {
+                id: id || measurementIdSeed++,
+                start: { x: start.x, z: start.z },
+                end: { x: end.x, z: end.z },
+                distance: Number(info.distance.toFixed(4)),
+                angle: Number(info.angle.toFixed(2)),
+                referenceDirection: referenceDirection ? { x: referenceDirection.x, z: referenceDirection.z } : null,
+                group: null
+            };
+            measurement.group = buildMeasurementVisual(measurement, false, false);
+            measureLayer.add(measurement.group);
+            measurements.push(measurement);
+            measurementIdSeed = Math.max(measurementIdSeed, measurement.id + 1);
+            setMeasureStatus(`已添加 ${measurements.length} 根测量线。点击测量线可选中后删除线段。`);
+            return measurement;
+        }
+
+        function updatePreviewMeasurement(start, end, referenceDirection = null) {
+            clearPreviewMeasurement();
+            const info = getMeasureInfo(start, end, referenceDirection);
+            if (info.distance < 0.05) return;
+            previewMeasurement = {
+                id: 'preview',
+                start: { x: start.x, z: start.z },
+                end: { x: end.x, z: end.z },
+                referenceDirection: referenceDirection ? { x: referenceDirection.x, z: referenceDirection.z } : null,
+                group: null
+            };
+            previewMeasurement.group = buildMeasurementVisual(previewMeasurement, true, false);
+            measureLayer.add(previewMeasurement.group);
+        }
+
+        function selectMeasurement(id) {
+            selectedMeasurementId = id;
+            updateLiabilityButtonsState();
+            measurements.forEach(measurement => {
+                const selected = measurement.id === id;
+                removePickablesForGroup(measurement.group);
+                measureLayer.remove(measurement.group);
+                disposeObject(measurement.group);
+                measurement.group = buildMeasurementVisual(measurement, false, selected);
+                measureLayer.add(measurement.group);
+            });
+            if (id !== null) {
+                setMeasureStatus(`已选中第 ${measurements.findIndex(item => item.id === id) + 1} 根测量线，可点击“删除线段”。`);
+            }
+        }
+
+        function deleteMeasurement(id) {
+            const index = measurements.findIndex(item => item.id === id);
+            if (index < 0) return;
+            const [measurement] = measurements.splice(index, 1);
+            removePickablesForGroup(measurement.group);
+            measureLayer.remove(measurement.group);
+            disposeObject(measurement.group);
+            selectedMeasurementId = null;
+            updateLiabilityButtonsState();
+            setMeasureStatus(`已删除测量线，当前剩余 ${measurements.length} 根。`);
+        }
+
+        function selectMeasurementFromClick(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(measurePickables, false);
+            const hit = intersects.find(item => item.object.userData.measurementId !== 'preview');
+            selectMeasurement(hit ? hit.object.userData.measurementId : null);
+        }
+
+        function vehicleEntityFromPointer(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(vehicleRaycastTargets, false);
+            const hit = intersects.find(item => item.object && item.object.userData && item.object.userData.vehicleEntity);
+            return hit ? hit.object.userData.vehicleEntity : null;
+        }
+
+        function serializeMeasurements() {
+            return measurements.map(item => ({
+                id: item.id,
+                start: { x: item.start.x, z: item.start.z },
+                end: { x: item.end.x, z: item.end.z },
+                distance: item.distance,
+                angle: item.angle
+            }));
+        }
+
+        function suggestSaveFileNameBase(sourcePath) {
+            const raw = String(sourcePath || '').replace(/\\/g, '/');
+            let stem = raw.split('/').pop() || 'accident';
+            stem = stem.replace(/\.html?$/i, '');
+            if (stem.endsWith('(line)')) stem = stem.slice(0, -6);
+            stem = stem.replace(/_\d{8}_\d{6}$/, '');
+            return stem || 'accident';
+        }
+
+        function isValidSaveFileNameBase(name) {
+            const text = String(name || '').trim();
+            if (!text) return { ok: false, error: '文件名不能为空' };
+            if (/[\\\/:\*\?"<>|]/.test(text)) {
+                return { ok: false, error: '文件名不能包含 \\ / : * ? " < > |' };
+            }
+            return { ok: true, value: text };
+        }
+
+        async function postSaveMeasurements(fileNameBase, overwrite, targetHtmlPath) {
+            const response = await fetch(activeSaveMeasurementsUrl || DEFAULT_SAVE_MEASUREMENTS_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sourceHtmlPath: runtimeConfig.sourceHtmlPath || '',
+                    measurements: serializeMeasurements(),
+                    fileNameBase,
+                    overwrite: !!overwrite,
+                    targetHtmlPath: targetHtmlPath || ''
+                })
+            });
+            let result = {};
+            try {
+                result = await response.json();
+            } catch (_err) {
+                result = {};
+            }
+            return { response, result };
+        }
+
+        async function saveMeasurements() {
+            if (!(await ensureSaveServiceAvailable())) return;
+            if (!runtimeConfig.sourceHtmlPath) {
+                alert('当前 HTML 缺少源文件路径，无法保存测量线。请重新从 Python 程序生成页面。');
+                return;
+            }
+            const suggested = suggestSaveFileNameBase(runtimeConfig.sourceHtmlPath);
+            const inputName = window.prompt(
+                '请输入保存文件名（最终保存为：名称_时间(line).html）',
+                suggested
+            );
+            if (inputName === null) return;
+            const checked = isValidSaveFileNameBase(inputName);
+            if (!checked.ok) {
+                alert(checked.error);
+                return;
+            }
+            try {
+                saveInProgress = true;
+                updateLiabilityButtonsState();
+                setMeasureStatus('正在保存结果...');
+                let { response, result } = await postSaveMeasurements(checked.value, false, '');
+                if (response.status === 409 && result && result.needsOverwrite) {
+                    const targetName = result.fileName || result.path || checked.value;
+                    const confirmed = window.confirm(
+                        `文件已存在：\n${targetName}\n是否覆盖？`
+                    );
+                    if (!confirmed) {
+                        setMeasureStatus('已取消保存。');
+                        return;
+                    }
+                    ({ response, result } = await postSaveMeasurements(
+                        checked.value,
+                        true,
+                        result.path || ''
+                    ));
+                }
+                if (!response.ok) {
+                    throw new Error(result.error || `HTTP ${response.status}`);
+                }
+                const savedPath = result.path || '';
+                if (savedPath) {
+                    runtimeConfig.sourceHtmlPath = savedPath;
+                }
+                alert(`HTML位置: ${savedPath}\n测量线已保存`);
+                setMeasureStatus('保存完成。可继续添加、删除线段，或再次点击“保存结果”。');
+            } catch (error) {
+                console.error(error);
+                const message = (error && error.message && !String(error.message).startsWith('HTTP'))
+                    ? String(error.message)
+                    : SERVICE_REQUIRED_MESSAGE;
+                alert(message);
+                setMeasureStatus(message);
+            } finally {
+                saveInProgress = false;
+                updateLiabilityButtonsState();
+            }
+        }
+
+        window.addEventListener('pointermove', (event) => {
+            if (measureMode && measureStart) {
+                const point = getGroundPoint(event);
+                if (!point) return;
+                const endResult = resolveEndPoint(measureStart, point);
+                updatePreviewMeasurement(measureStart, endResult.point, endResult.referenceDirection);
+                setMeasureStatus(getPreviewStatusText());
+                return;
+            }
+            if (!liabilityMode || event.target !== renderer.domElement) return;
+            const vehicleEntity = vehicleEntityFromPointer(event);
+            setHoveredVehicleEntity(vehicleEntity, event.clientX, event.clientY);
+        });
+
+        window.addEventListener('pointerdown', async (event) => {
+            if (event.target !== renderer.domElement) return;
+            renderer.domElement.focus();
+            if (!measureMode) {
+                if (liabilityMode) {
+                    if (event.button === 0) setHoveredVehicleEntity(vehicleEntityFromPointer(event), event.clientX, event.clientY);
+                    return;
+                }
+                if (event.button === 0) selectMeasurementFromClick(event);
+                return;
+            }
+
+            event.preventDefault();
+            if (event.button === 2) {
+                exitMeasureMode();
+                return;
+            }
+            if (event.button !== 0) return;
+
+            if (!(await ensureSaveServiceAvailable())) {
+                exitMeasureMode();
+                return;
+            }
+
+            const point = getGroundPoint(event);
+            if (!point) return;
+
+            if (!measureStart) {
+                measureStart = snapStartPoint(point);
+                selectedMeasurementId = null;
+                updateLiabilityButtonsState();
+                setMeasureStatus(isMagneticSnapActive()
+                    ? '已确定起点（磁吸已生效），移动鼠标查看虚线预览，点击第二点完成测量线。'
+                    : '已确定起点，移动鼠标查看虚线预览，点击第二点完成测量线。');
+                return;
+            }
+
+            const endResult = resolveEndPoint(measureStart, point);
+            addMeasurement(measureStart, endResult.point, undefined, endResult.referenceDirection);
+            measureStart = null;
+            clearPreviewMeasurement();
+        });
+
+        window.addEventListener('contextmenu', (e) => {
+            if (measureMode) {
+                e.preventDefault();
+            }
+        });
+        renderer.domElement.addEventListener('pointerleave', () => {
+            if (liabilityMode) setHoveredVehicleEntity(null);
+        });
+        window.addEventListener('keydown', event => {
+            if (event.key === 'Escape') {
+                if (liabilityMode) setLiabilityMode(false);
+                if (reportModal.classList.contains('is-visible')) closeReportModal();
+            }
+        });
+
+        const savedMeasurements = Array.isArray(runtimeConfig.savedMeasurements) ? runtimeConfig.savedMeasurements : [];
+        savedMeasurements.forEach(item => {
+            if (item && item.start && item.end) {
+                addMeasurement(makePoint(item.start), makePoint(item.end), Number(item.id) || undefined);
+            }
+        });
+        if (savedMeasurements.length > 0) {
+            setMeasureStatus(`已恢复 ${savedMeasurements.length} 根测量线。`);
+        }
+        updateLiabilityButtonsState();
+    </script>
+</body>
+</html>

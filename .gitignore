@@ -1,0 +1,33 @@
+# Local Python / Conda environment
+env/
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# PyInstaller and packaged output
+build/
+dist/
+release/
+
+# Local secrets: never commit the real API key
+config/ai_settings.json
+
+# Generated / case data (accident reports, annotations)
+history/*
+!history/.gitkeep
+
+# YOLO weights exceed GitHub's 100MB file limit
+downloads/*.pt
+downloads/*.onnx
+downloads/*.engine
+
+# Editor / OS
+.cursor/
+.idea/
+.vscode/
+*.swp
+Thumbs.db
+Desktop.ini
+.DS_Store

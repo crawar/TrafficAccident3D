@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>车辆建模预览</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: sans-serif; }
+        #hint {
+            position: absolute;
+            left: 10px;
+            top: 10px;
+            padding: 6px 10px;
+            background: rgba(0,0,0,0.62);
+            color: #fff;
+            font-size: 12px;
+            border-radius: 6px;
+            z-index: 100;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="hint">加载中...</div>
+
+    <script src="../static/three/three.min.js"></script>
+    <script src="../static/three/OrbitControls.js"></script>
+    <script src="../static/three/GLTFLoader.js"></script>
+
+    <script>
+        const accidentSettings = {
+            vehicles: [
+                { type: '小客车', rotation: { x: 0, y: 0, z: 0 } },
+                { type: '商务车', rotation: { x: 0, y: 0, z: 0 } },
+                { type: '牵引车及挂车', rotation: { x: 0, y: 0, z: 0 } },
+                { type: '大型厢式货车', rotation: { x: 0, y: 0, z: 0 } },
+                { type: '大型罐式货车', rotation: { x: 0, y: 0, z: 0 } },
+                { type: '大型栏板货车', rotation: { x: 0, y: 0, z: 0 } },
+                { type: '轻型栏板货车', rotation: { x: 0, y: 0, z: 0 } },
+                { type: '大巴车', rotation: { x: 0, y: 0, z: 0 } }
+            ],
+            markers: [
+                { type: '安全椎桶', modelKind: 'marker', rotation: { x: 0, y: 0, z: 0 } },
+                { type: '成年人', modelKind: 'marker', rotation: { x: 0, y: 0, z: 0 } },
+                { type: '导向牌', modelKind: 'marker', rotation: { x: 0, y: 0, z: 0 } },
+                { type: '散落物', modelKind: 'marker', rotation: { x: 0, y: 0, z: 0 } },
+                { type: '碰撞点', modelKind: 'marker', rotation: { x: 0, y: 0, z: 0 } }
+            ]
+        };
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87ceeb);
+
+        const camera = new THREE.PerspectiveCamera(46, window.innerWidth / window.innerHeight, 0.1, 2000);
+        camera.position.set(0, 13, 19);
+        camera.lookAt(0, 0, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        if (typeof THREE.OrbitControls !== 'function') {
+            THREE.OrbitControls = class {
+                constructor(camera) {
+                    this.object = camera;
+                    this.target = new THREE.Vector3(0, 0, 0);
+                    this.enableDamping = false;
+                    this.dampingFactor = 0;
+                    this.minPolarAngle = 0;
+                    this.maxPolarAngle = Math.PI;
+                }
+                update() {
+                    this.object.lookAt(this.target);
+                }
+            };
+        }
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.target.set(0, 0, 0);
+        controls.minPolarAngle = 0.05;
+        controls.maxPolarAngle = 1.48;
+
+        scene.add(new THREE.AmbientLight(0xffffff, 0.62));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+        dirLight.position.set(20, 35, 26);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        scene.add(dirLight);
+
+        <!-- VEHICLE_MODEL_SCRIPT -->
+        <!-- MARKER_MODEL_SCRIPT -->
+
+        let vehicleRoot = null;
+        let laneRoot = null;
+        let currentIndex = 0;
+
+        function addLaneLine(group, x, zLen, solid) {
+            const mat = new THREE.MeshBasicMaterial({ color: 0xf3f3f3 });
+            if (solid) {
+                const geo = new THREE.BoxGeometry(0.08, 0.012, zLen);
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.set(x, 0.026, 0);
+                group.add(mesh);
+                return;
+            }
+            for (let z = -zLen / 2 + 0.7; z < zLen / 2; z += 1.6) {
+                const geo = new THREE.BoxGeometry(0.07, 0.012, 0.82);
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.set(x, 0.028, z);
+                group.add(mesh);
+            }
+        }
+
+        function rebuildLane(laneWidth, emergencyLaneWidth) {
+            if (laneRoot) {
+                scene.remove(laneRoot);
+                laneRoot = null;
+            }
+            VEHICLE_LANE_WIDTH = laneWidth;
+            VEHICLE_EMERGENCY_LANE_WIDTH = emergencyLaneWidth;
+            const group = new THREE.Group();
+            const zLen = 24;
+            const leftSolidX = -emergencyLaneWidth / 2;
+            const rightSolidX = emergencyLaneWidth / 2;
+            const nextLaneX = rightSolidX + laneWidth;
+            const roadWidth = emergencyLaneWidth + laneWidth + 1.6;
+            const roadCenterX = (leftSolidX + nextLaneX) / 2;
+            const roadGeo = new THREE.PlaneGeometry(roadWidth, zLen);
+            const roadMat = new THREE.MeshStandardMaterial({ color: 0x4b4b4b, roughness: 0.82 });
+            const road = new THREE.Mesh(roadGeo, roadMat);
+            road.rotation.x = -Math.PI / 2;
+            road.position.set(roadCenterX, 0, 0);
+            road.receiveShadow = true;
+            group.add(road);
+
+            addLaneLine(group, leftSolidX, zLen, true);
+            addLaneLine(group, rightSolidX, zLen, true);
+            addLaneLine(group, nextLaneX, zLen, false);
+
+            laneRoot = group;
+            scene.add(laneRoot);
+        }
+
+        function updateHintForType(name) {
+            const el = document.getElementById('hint');
+            el.textContent = name + ' - 位于车道中间，可拖拽旋转、滚轮缩放';
+        }
+
+        function previewItems() {
+            return accidentSettings.vehicles.concat(accidentSettings.markers || []);
+        }
+
+        function rebuildVehicle() {
+            if (!VEHICLE_MODELS_READY) {
+                whenVehicleModelsReady(rebuildVehicle);
+                return;
+            }
+            const list = previewItems();
+            const src = list[currentIndex];
+            if (!src) return;
+            if (vehicleRoot) {
+                scene.remove(vehicleRoot);
+                vehicleRoot = null;
+            }
+            const cfg = {
+                type: src.type,
+                position: { x: 0, y: 0, z: 0 },
+                rotation: { x: src.rotation.x, y: src.rotation.y, z: src.rotation.z }
+            };
+            // Optional paint override (e.g. size dialog shows the vehicle's
+            // current grab/auto color). Modeling-preview leaves this unset
+            // so the GLB keeps its native materials.
+            const paint = window.previewPaintColors || {};
+            const bodyColor = paint.color || src.color || null;
+            const cargoColor = paint.cargoColor || src.cargoColor || null;
+            if (bodyColor) cfg.color = bodyColor;
+            if (cargoColor) cfg.cargoColor = cargoColor;
+            vehicleRoot = src.modelKind === 'marker' ? createSceneMarker(cfg) : createVehicle(cfg);
+            scene.add(vehicleRoot);
+            updateHintForType(src.type);
+        }
+
+        function setPreviewPaintColors(color, cargoColor) {
+            window.previewPaintColors = {
+                color: color || null,
+                cargoColor: cargoColor || null
+            };
+            rebuildVehicle();
+        }
+
+        function setVehicleIndex(i) {
+            const list = previewItems();
+            const n = list.length;
+            if (n === 0) return;
+            currentIndex = ((i % n) + n) % n;
+            rebuildLane(VEHICLE_LANE_WIDTH, VEHICLE_EMERGENCY_LANE_WIDTH);
+            rebuildVehicle();
+        }
+
+        function updateVehicleSpecs(type, spec, laneWidth, emergencyLaneWidth, outlineWidth, idx, showMapping) {
+            if (MARKER_SPECS[type]) {
+                MARKER_SPECS[type] = spec;
+            } else {
+                VEHICLE_SPECS[type] = spec;
+            }
+            if (arguments.length === 5) {
+                idx = outlineWidth;
+                outlineWidth = SCENE_OUTLINE_WIDTH;
+            } else if (arguments.length === 4) {
+                idx = emergencyLaneWidth;
+                emergencyLaneWidth = VEHICLE_EMERGENCY_LANE_WIDTH;
+            }
+            if (typeof laneWidth === 'number' && laneWidth > 0) {
+                const safeEmergencyLaneWidth =
+                    (typeof emergencyLaneWidth === 'number' && emergencyLaneWidth > 0)
+                        ? emergencyLaneWidth
+                        : VEHICLE_EMERGENCY_LANE_WIDTH;
+                rebuildLane(laneWidth, safeEmergencyLaneWidth);
+            }
+            if (typeof outlineWidth === 'number' && outlineWidth > 0) {
+                setSceneOutlineWidth(outlineWidth);
+            }
+            if (typeof showMapping === 'boolean' && typeof setShowVehicleMapping === 'function') {
+                setShowVehicleMapping(showMapping);
+            }
+            if (typeof idx === 'number') {
+                const n = previewItems().length;
+                currentIndex = ((idx % n) + n) % n;
+            }
+            rebuildVehicle();
+        }
+
+        window.onShowVehicleMappingChanged = function () {
+            rebuildVehicle();
+        };
+
+        window.setVehicleIndex = setVehicleIndex;
+        window.updateVehicleSpecs = updateVehicleSpecs;
+        window.setPreviewPaintColors = setPreviewPaintColors;
+
+        const _params = new URLSearchParams(window.location.search);
+        const _qi = parseInt(_params.get('idx') || '0', 10);
+        setVehicleIndex(isNaN(_qi) ? 0 : _qi);
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            if (typeof updateMarkerAnimations === 'function') {
+                updateMarkerAnimations(scene, performance.now());
+            }
+            if (typeof updateVehicleMappingBreath === 'function') {
+                updateVehicleMappingBreath(performance.now());
+            }
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>

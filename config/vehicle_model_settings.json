@@ -1,0 +1,123 @@
+{
+  "laneWidth": 3.75,
+  "emergencyLaneWidth": 3.0,
+  "outlineWidth": 2.5,
+  "vehicleSpecs": {
+    "小客车": {
+      "kind": "passenger",
+      "width": 1.8,
+      "length": 4.3,
+      "height": 1.6,
+      "wheelRadius": 0.3,
+      "wheels": [
+        1.25,
+        -1.25
+      ]
+    },
+    "商务车": {
+      "kind": "passenger",
+      "width": 1.6,
+      "length": 3.8,
+      "height": 1.9,
+      "wheelRadius": 0.3,
+      "wheels": [
+        1.3,
+        -1.1
+      ]
+    },
+    "牵引车及挂车": {
+      "kind": "tractorTrailer",
+      "width": 2.6,
+      "length": 18.0,
+      "height": 3.3,
+      "wheelRadius": 0.42,
+      "wheels": [
+        6.5,
+        3.75,
+        -2.8,
+        -4.8
+      ]
+    },
+    "大型厢式货车": {
+      "kind": "boxTruck",
+      "width": 2.6,
+      "length": 9.0,
+      "height": 3.5,
+      "wheelRadius": 0.42,
+      "wheels": [
+        3.2,
+        -2.3
+      ]
+    },
+    "大型罐式货车": {
+      "kind": "tankTruck",
+      "width": 2.6,
+      "length": 9.0,
+      "height": 3.5,
+      "wheelRadius": 0.42,
+      "wheels": [
+        2.8,
+        -2.1,
+        -0.4
+      ]
+    },
+    "大型栏板货车": {
+      "kind": "flatbedTruck",
+      "width": 2.6,
+      "length": 9.0,
+      "height": 3.5,
+      "wheelRadius": 0.42,
+      "wheels": [
+        2.9,
+        -2.6
+      ]
+    },
+    "轻型栏板货车": {
+      "kind": "flatbedTruck",
+      "width": 2.1,
+      "length": 6.0,
+      "height": 2.2,
+      "wheelRadius": 0.36,
+      "wheels": [
+        1.9,
+        -2.0
+      ]
+    },
+    "大巴车": {
+      "kind": "bus",
+      "width": 2.6,
+      "length": 12.0,
+      "height": 4.0,
+      "wheelRadius": 0.44,
+      "wheels": [
+        3.0,
+        -3.0
+      ]
+    }
+  },
+  "markerSpecs": {
+    "安全椎桶": {
+      "kind": "trafficCone",
+      "width": 0.4,
+      "length": 0.4,
+      "height": 0.8
+    },
+    "成年人": {
+      "kind": "adult",
+      "width": 0.35,
+      "length": 0.45,
+      "height": 1.75
+    },
+    "导向牌": {
+      "kind": "guideSign",
+      "width": 0.8,
+      "length": 0.2,
+      "height": 2.2
+    },
+    "散落物": {
+      "kind": "scatteredDebris",
+      "radius": 1.5,
+      "emissionInterval": 0.5
+    }
+  }
+}
