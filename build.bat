@@ -218,6 +218,17 @@ if not exist "%APP_OUT%\history" mkdir "%APP_OUT%\history"
 if not exist "%APP_OUT%\history\json" mkdir "%APP_OUT%\history\json"
 echo [OK] history folders created.
 
+REM Copy distilled playbook and case packs. Skip Excel sources and migration leftovers.
+if not exist "%APP_OUT%\knowledge" mkdir "%APP_OUT%\knowledge"
+if exist "%PROJECT_DIR%knowledge" (
+    robocopy "%PROJECT_DIR%knowledge" "%APP_OUT%\knowledge" /E /XF *.xlsx *.xls *.migrated *.tmp >nul
+    if errorlevel 8 (
+        echo [ERROR] Failed to copy knowledge.
+        goto :fail
+    )
+)
+echo [OK] knowledge copied ^(playbook and case packs^).
+
 if exist "%PROJECT_DIR%pic" (
     call :copy_dir "%PROJECT_DIR%pic" "%APP_OUT%\pic" "pic"
     if errorlevel 1 goto :fail
@@ -261,6 +272,14 @@ if not exist "%APP_OUT%\history" (
     echo [ERROR] Missing history folder
     set "VERIFY_FAIL=1"
 )
+if exist "%PROJECT_DIR%knowledge\playbook.json" if not exist "%APP_OUT%\knowledge\playbook.json" (
+    echo [ERROR] Missing knowledge\playbook.json
+    set "VERIFY_FAIL=1"
+)
+if exist "%PROJECT_DIR%knowledge\index.json" if not exist "%APP_OUT%\knowledge\index.json" (
+    echo [ERROR] Missing knowledge\index.json
+    set "VERIFY_FAIL=1"
+)
 if not exist "%APP_OUT%\downloads" (
     echo [ERROR] Missing downloads folder
     set "VERIFY_FAIL=1"
@@ -289,7 +308,7 @@ echo.
 echo Packaged resources:
 echo   - templates / static / glbmodels / downloads
 echo   - ExpertPic / config ^(API key cleared^)
-echo   - history ^(empty^) / Example images / pic^(if present^)
+echo   - history ^(empty^) / knowledge ^(playbook and case packs^) / Example images / pic^(if present^)
 echo.
 echo Double-click this file to run the packed app:
 echo %APP_OUT%\%APP_NAME%.exe

@@ -9,6 +9,7 @@ import os
 from core.yolo_detector import YoloDetector
 from gui.example_dialog import ExampleDialog
 from gui.result_window import ResultWindow
+from gui.knowledge_settings_dialog import KnowledgeSettingsDialog
 from gui.system_settings_dialog import SystemSettingsDialog
 from gui.vehicle_preview_dialog import open_vehicle_preview
 from utils.ai_settings import load_ai_settings
@@ -103,13 +104,7 @@ class ProcessThread(QThread):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("六支队通用无人机一图勘察数字模型")
-
-        self.resize(460, 820)
-        screen = QApplication.primaryScreen().geometry()
-        x = (screen.width() - self.width()) // 2
-        y = (screen.height() - self.height()) // 2
-        self.move(x, y)
+        self.setWindowTitle("六支队事故智脑")
 
         self.current_image_path = None
         self.vehicles = []
@@ -117,6 +112,12 @@ class MainWindow(QMainWindow):
         self.ai_settings = load_ai_settings()
 
         self.init_ui()
+        self.adjustSize()
+        screen = QApplication.primaryScreen().geometry()
+        x = (screen.width() - self.width()) // 2
+        y = (screen.height() - self.height()) // 2
+        self.move(x, y)
+
         self.refresh_port_warning()
         self._restore_main_actions_enabled()
 
@@ -173,10 +174,11 @@ class MainWindow(QMainWindow):
         )
         self.setCentralWidget(outer)
         outer_layout = QVBoxLayout(outer)
-        outer_layout.setContentsMargins(20, 24, 20, 24)
-        outer_layout.addStretch(1)
+        outer_layout.setContentsMargins(16, 16, 16, 16)
+        outer_layout.setSpacing(0)
 
         row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
         row.addStretch(1)
 
         column = QWidget()
@@ -184,26 +186,26 @@ class MainWindow(QMainWindow):
         column.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
         inner = QVBoxLayout(column)
         inner.setContentsMargins(0, 0, 0, 0)
-        inner.setSpacing(14)
+        inner.setSpacing(10)
 
         header = QFrame()
         header.setObjectName("headerPanel")
         header_layout = QVBoxLayout(header)
-        header_layout.setContentsMargins(16, 16, 16, 16)
-        header_layout.setSpacing(6)
+        header_layout.setContentsMargins(12, 10, 12, 10)
+        header_layout.setSpacing(4)
 
-        brand = QLabel("DRONE SURVEY  ·  3D MODEL")
+        brand = QLabel("ACCIDENT MIND  ·  AI")
         brand.setObjectName("brandMark")
         brand.setAlignment(Qt.AlignCenter)
         header_layout.addWidget(brand)
 
-        title = QLabel("六支队通用无人机\n一图勘察数字模型")
+        title = QLabel("六支队事故智脑")
         title.setObjectName("titleLabel")
         title.setAlignment(Qt.AlignCenter)
-        title.setWordWrap(True)
+        title.setWordWrap(False)
         header_layout.addWidget(title)
 
-        subtitle = QLabel("航拍识别 · 三维重建 · 测量导出")
+        subtitle = QLabel("人工智能与交通事故的结合")
         subtitle.setObjectName("subtitleLabel")
         subtitle.setAlignment(Qt.AlignCenter)
         header_layout.addWidget(subtitle)
@@ -212,8 +214,8 @@ class MainWindow(QMainWindow):
         action_panel = QFrame()
         action_panel.setObjectName("actionPanel")
         action_layout = QVBoxLayout(action_panel)
-        action_layout.setContentsMargins(14, 14, 14, 14)
-        action_layout.setSpacing(10)
+        action_layout.setContentsMargins(12, 10, 12, 10)
+        action_layout.setSpacing(8)
 
         action_label = QLabel("主流程")
         action_label.setObjectName("sectionLabel")
@@ -240,7 +242,7 @@ class MainWindow(QMainWindow):
         action_layout.addWidget(self.history_btn)
 
         self.progress_slot = QWidget()
-        self.progress_slot.setFixedHeight(56)
+        self.progress_slot.setFixedHeight(40)
         self.progress_slot.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
@@ -293,8 +295,8 @@ class MainWindow(QMainWindow):
         tool_panel = QFrame()
         tool_panel.setObjectName("toolPanel")
         tool_layout = QVBoxLayout(tool_panel)
-        tool_layout.setContentsMargins(14, 14, 14, 14)
-        tool_layout.setSpacing(10)
+        tool_layout.setContentsMargins(12, 10, 12, 10)
+        tool_layout.setSpacing(8)
 
         tool_label = QLabel("工具与设置")
         tool_label.setObjectName("sectionLabel")
@@ -323,7 +325,18 @@ class MainWindow(QMainWindow):
         self.system_settings_btn.clicked.connect(self.open_system_settings)
         tool_layout.addWidget(self.system_settings_btn)
 
-        tool_layout.addStretch(1)
+        self.knowledge_settings_btn = QPushButton("知识库设置")
+        self.knowledge_settings_btn.setStyleSheet(HISTORY_BTN_STYLE)
+        self.knowledge_settings_btn.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
+        self.knowledge_settings_btn.setMinimumHeight(PRIMARY_CONTROL_H)
+        self.knowledge_settings_btn.setCursor(Qt.PointingHandCursor)
+        self.knowledge_settings_btn.setToolTip(
+            "历史认定精炼结果与口径手册。无 API 密钥仍可打开，但需先在系统设置中配置密钥才能精炼。"
+        )
+        self.knowledge_settings_btn.clicked.connect(self.open_knowledge_settings)
+        tool_layout.addWidget(self.knowledge_settings_btn)
 
         footer = QLabel("湖南交警总队 高速公路交通管理六支队@2026")
         footer.setObjectName("footerHint")
@@ -349,15 +362,9 @@ class MainWindow(QMainWindow):
         tool_layout.addWidget(self.port_warning_label)
         inner.addWidget(tool_panel)
 
-        # Match tool panel height to main-flow panel (includes progress slot reserve).
-        pair_h = max(action_panel.sizeHint().height(), tool_panel.sizeHint().height())
-        action_panel.setMinimumHeight(pair_h)
-        tool_panel.setMinimumHeight(pair_h)
-
         row.addWidget(column)
         row.addStretch(1)
         outer_layout.addLayout(row)
-        outer_layout.addStretch(1)
 
     def _models_available(self):
         return models_available() and bool(selected_model_path())
@@ -489,3 +496,7 @@ class MainWindow(QMainWindow):
             self.ai_settings = load_ai_settings()
         self._restore_main_actions_enabled()
         self.refresh_port_warning()
+
+    def open_knowledge_settings(self):
+        dialog = KnowledgeSettingsDialog(self)
+        dialog.exec()

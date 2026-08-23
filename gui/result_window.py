@@ -36,6 +36,13 @@ _GENERATE_DISABLED_STYLE = (
     "font-size: 16px; font-weight: bold; background-color: #9e9e9e; color: #eeeeee;"
 )
 _AI_DISABLED_TOOLTIP = "请先在系统设置中开启AI分析责任"
+_PREPARE_STATUS_STEPS = (
+    "3D数据计算中……",
+    "正在翻找知识库……",
+    "正在注入事故知识……",
+    "AI责任正在划定……",
+    "AI专家正在思考……",
+)
 _SHORTCUTS_HELP_TEXT = (
     "【视图缩放与平移】\n"
     "· Alt + 滚轮上：放大图片（缩小可视范围）\n"
@@ -155,6 +162,11 @@ class ResultWindow(QDialog):
         self.ai_settings = dict(ai_settings or {})
         self.progress_dialog = None
         self.ai_thread = None
+        self._prepare_status_steps = []
+        self._prepare_status_index = 0
+        self._prepare_status_timer = QTimer(self)
+        self._prepare_status_timer.setInterval(5000)
+        self._prepare_status_timer.timeout.connect(self._advance_prepare_status)
         self._selected_veh = None
         self._base_hint_text = ""
         self._add_btn_flow_step = 0
@@ -706,19 +718,7 @@ class ResultWindow(QDialog):
                 return
 
             self.generate_btn.setEnabled(False)
-            self.progress_dialog = QProgressDialog(
-                "建模数据准备中",
-                None,
-                0,
-                0,
-                self,
-            )
-            self.progress_dialog.setWindowTitle("准备中")
-            self.progress_dialog.setCancelButton(None)
-            self.progress_dialog.setWindowModality(Qt.WindowModal)
-            self.progress_dialog.setMinimumDuration(0)
-            self._polish_progress_dialog()
-            self.progress_dialog.show()
+            self._open_prepare_status_dialog()
             self.ai_thread = LiabilityAnalysisThread(
                 self.image_path,
                 final_vehicles,
@@ -761,7 +761,48 @@ class ResultWindow(QDialog):
         except Exception as e:
             QMessageBox.critical(self, "错误", f"生成或保存失败: {str(e)}")
 
+    def _open_prepare_status_dialog(self):
+        self._stop_prepare_status()
+        self._prepare_status_steps = list(_PREPARE_STATUS_STEPS)
+        self._prepare_status_index = 0
+        self.progress_dialog = QProgressDialog(
+            self._prepare_status_steps[0],
+            None,
+            0,
+            0,
+            self,
+        )
+        self.progress_dialog.setWindowTitle("准备中")
+        self.progress_dialog.setCancelButton(None)
+        self.progress_dialog.setWindowModality(Qt.WindowModal)
+        self.progress_dialog.setMinimumDuration(0)
+        self._polish_progress_dialog()
+        self.progress_dialog.show()
+        if len(self._prepare_status_steps) > 1:
+            self._prepare_status_timer.start()
+
+    def _advance_prepare_status(self):
+        if self.progress_dialog is None or not self._prepare_status_steps:
+            return
+        last_index = len(self._prepare_status_steps) - 1
+        if self._prepare_status_index >= last_index:
+            self._prepare_status_timer.stop()
+            return
+        self._prepare_status_index += 1
+        self.progress_dialog.setLabelText(
+            self._prepare_status_steps[self._prepare_status_index]
+        )
+        if self._prepare_status_index >= last_index:
+            self._prepare_status_timer.stop()
+
+    def _stop_prepare_status(self):
+        if self._prepare_status_timer is not None:
+            self._prepare_status_timer.stop()
+        self._prepare_status_steps = []
+        self._prepare_status_index = 0
+
     def _close_progress_dialog(self):
+        self._stop_prepare_status()
         if self.progress_dialog is not None:
             self.progress_dialog.close()
             self.progress_dialog.deleteLater()
@@ -804,7 +845,6 @@ class ResultWindow(QDialog):
     def _on_ai_finished(
         self, final_vehicles, final_lanes, final_markers, ai_analysis, liability_context
     ):
-        self._close_progress_dialog()
         try:
             self._finish_generate(
                 final_vehicles,
@@ -817,6 +857,8 @@ class ResultWindow(QDialog):
             )
         except Exception as exc:
             QMessageBox.critical(self, "错误", f"生成或保存失败: {str(exc)}")
+        finally:
+            self._close_progress_dialog()
 
     def _on_ai_error(self, final_vehicles, final_lanes, final_markers, err_msg):
         self._close_progress_dialog()

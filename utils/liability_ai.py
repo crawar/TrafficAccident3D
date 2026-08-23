@@ -8,6 +8,7 @@ import cv2
 from utils.ai_experts import experts_for_runtime, load_ai_experts
 from utils.ai_settings import ai_request_config, sanitize_ai_settings
 from utils.data_converter import convert_to_3d_data
+from utils.knowledge_retrieve import build_knowledge_attachment
 
 
 DEFAULT_DEEPSEEK_CHAT_URL = "https://api.deepseek.com/chat/completions"
@@ -418,6 +419,9 @@ def _request_payload(liability_context, ai_settings, experts=None):
             "认定责任前先按上述配对规则自检一次：若发现矛盾，必须重新衡量证据并修正责任，使最终结果在逻辑上自洽。",
             "必须一次性返回全部结果，禁止按专家角色分多次请求或省略 expertSpeeches。",
             "expertSpeeches 必须按 experts 数组顺序逐人输出，expertId/expertName 与列表一致，speech 使用该专家第一人称口吻并贴合其 rolePrompt。",
+            "若存在 historicalLiabilityKnowledge，必须参考其中的口径手册与相似历史案件的责任配对、法条习惯和认定书口吻；"
+            "禁止照搬历史案件的具体车辆、地点、伤亡或经过；与当前 accidentData 冲突时以当前现场为准。"
+            "专家发言不得与 vehicleResponsibilities 的责任结论互相矛盾。",
         ],
         "experts": [
             {
@@ -438,6 +442,9 @@ def _request_payload(liability_context, ai_settings, experts=None):
         "responseSchema": response_schema,
         "accidentData": liability_context,
     }
+    knowledge_attachment = build_knowledge_attachment(liability_context)
+    if knowledge_attachment:
+        prompt["historicalLiabilityKnowledge"] = knowledge_attachment
     append_requirement = str(
         request_config.get("liabilityAppendRequirement", "") or ""
     ).strip()
@@ -465,6 +472,19 @@ def _request_payload(liability_context, ai_settings, experts=None):
             },
         ],
     }
+
+
+def _payload_used_knowledge(payload):
+    try:
+        messages = payload.get("messages") if isinstance(payload, dict) else None
+        if not isinstance(messages, list) or len(messages) < 2:
+            return False
+        content = messages[1].get("content") if isinstance(messages[1], dict) else ""
+        data = json.loads(content)
+        knowledge = data.get("historicalLiabilityKnowledge")
+        return bool(knowledge)
+    except (TypeError, ValueError, json.JSONDecodeError, AttributeError):
+        return False
 
 
 def _request_options(ai_settings):
@@ -794,6 +814,7 @@ def request_liability_analysis(ai_settings, liability_context):
     parsed_content = json.loads(_extract_json_content(content))
     parsed_content = _repair_vehicle_responsibilities(parsed_content, liability_context)
     parsed_content = _align_expert_speeches(parsed_content, experts)
+    knowledge_referenced = _payload_used_knowledge(payload)
     return {
         "provider": "DeepSeek",
         "model": payload["model"],
@@ -802,4 +823,5 @@ def request_liability_analysis(ai_settings, liability_context):
         "response": parsed_content,
         "requestContext": liability_context,
         "experts": experts,
+        "knowledgeReferenced": knowledge_referenced,
     }

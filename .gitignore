@@ -18,6 +18,13 @@ config/ai_settings.json
 history/*
 !history/.gitkeep
 
+# Knowledge source tables and leftovers stay local.
+# Distilled playbook.json, index.json and packs/*.json are tracked.
+knowledge/**/*.xlsx
+knowledge/**/*.xls
+knowledge/**/*.tmp
+knowledge/**/*.migrated
+
 # YOLO weights exceed GitHub's 100MB file limit
 downloads/*.pt
 downloads/*.onnx

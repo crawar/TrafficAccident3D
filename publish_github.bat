@@ -8,6 +8,7 @@ if exist "D:\Git\cmd\git.exe" set "PATH=D:\Git\cmd;%PATH%"
 echo ========================================================
 echo Publish TrafficAccident3D to GitHub (public)
 echo This script will NOT upload config\ai_settings.json
+echo Distilled knowledge playbook and case packs ARE uploaded.
 echo ========================================================
 echo.
 
@@ -89,6 +90,7 @@ gh repo view --web --json url --jq .url
 echo.
 echo Local secret kept out of GitHub:
 echo   config\ai_settings.json
+echo Distilled knowledge playbook and case packs are included.
 echo YOLO weights were not uploaded (GitHub 100MB limit).
 echo ========================================================
 pause

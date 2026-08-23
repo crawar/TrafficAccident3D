@@ -114,6 +114,42 @@ def _scan_for_key(root, key):
     return hits
 
 
+def _verify_packed_knowledge(project_dir, app_out):
+    src_dir = os.path.join(project_dir, "knowledge")
+    dst_dir = os.path.join(app_out, "knowledge")
+    failed = False
+    if not os.path.isdir(dst_dir):
+        print("[ERROR] Missing knowledge folder")
+        return True
+
+    for name in ("playbook.json", "index.json"):
+        src_path = os.path.join(src_dir, name)
+        dst_path = os.path.join(dst_dir, name)
+        if os.path.isfile(src_path) and not os.path.isfile(dst_path):
+            print(f"[ERROR] Missing knowledge\\{name}")
+            failed = True
+        elif os.path.isfile(dst_path):
+            print(f"[OK] knowledge\\{name}")
+
+    src_packs = os.path.join(src_dir, "packs")
+    dst_packs = os.path.join(dst_dir, "packs")
+    src_files = []
+    if os.path.isdir(src_packs):
+        src_files = [
+            name
+            for name in sorted(os.listdir(src_packs))
+            if name.lower().endswith(".json")
+        ]
+    for name in src_files:
+        dst_path = os.path.join(dst_packs, name)
+        if not os.path.isfile(dst_path):
+            print(f"[ERROR] Missing knowledge\\packs\\{name}")
+            failed = True
+        else:
+            print(f"[OK] knowledge\\packs\\{name}")
+    return failed
+
+
 def main() -> int:
     if len(sys.argv) != 3:
         print("Usage: pack_verify_release.py <project_dir> <app_out>", file=sys.stderr)
@@ -180,6 +216,10 @@ def main() -> int:
             print("[OK] Source API key was not found in the release package.")
     else:
         print("[OK] Source ai_settings.json has no API key to scan for.")
+
+    knowledge_failed = _verify_packed_knowledge(project_dir, app_out)
+    if knowledge_failed:
+        failed = True
 
     return 1 if failed else 0
 

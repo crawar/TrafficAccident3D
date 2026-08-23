@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>交通事故 3D 建模场景复盘</title>
+    <title>事故智脑</title>
     <style>
         body { margin: 0; overflow: hidden; font-family: sans-serif; }
         .measure-control {
@@ -1395,19 +1395,32 @@ const accidentSceneRuntime = {
             Math.max(0.02, Number(runtimeConfig.playbackSpeedFactor) || 0.1)
         );
 
+        function getKnowledgeCitationLine() {
+            const analysis = runtimeConfig.liabilityAnalysis || {};
+            return analysis.knowledgeReferenced ? '依据：已引用知识库' : '依据：未引用知识库';
+        }
+
+        function withKnowledgeCitation(text) {
+            const body = String(text == null ? '' : text).replace(/\s+$/, '');
+            return `${body}\n\n${getKnowledgeCitationLine()}`;
+        }
+
         function formatLiabilityText(vehicleEntity) {
             const liability = vehicleEntity && vehicleEntity.liability;
+            let body = '';
             if (!liability) {
-                return `${vehicleEntity.vehicleId || '未编号车辆'}\n暂无责任信息`;
+                body = `${vehicleEntity.vehicleId || '未编号车辆'}\n暂无责任信息`;
+            } else {
+                body = [
+                    `${vehicleEntity.vehicleId || '未编号车辆'}`,
+                    `责任: ${liability.responsibility || '未提供'}`,
+                    '',
+                    `原因: ${liability.reason || '未提供'}`,
+                    '',
+                    `事故角色: ${liability.accidentRole || '未提供'}`
+                ].join('\n');
             }
-            return [
-                `${vehicleEntity.vehicleId || '未编号车辆'}`,
-                `责任: ${liability.responsibility || '未提供'}`,
-                '',
-                `原因: ${liability.reason || '未提供'}`,
-                '',
-                `事故角色: ${liability.accidentRole || '未提供'}`
-            ].join('\n');
+            return withKnowledgeCitation(body);
         }
 
         function setLiabilityCardVisible(visible) {
@@ -2153,7 +2166,9 @@ const accidentSceneRuntime = {
                     const speechItem = speechById[String(expert.id || '')]
                         || speechByName[String(expert.name || '')]
                         || {};
-                    const speech = String(speechItem.speech || '').trim() || '暂无发言';
+                    const speech = withKnowledgeCitation(
+                        String(speechItem.speech || '').trim() || '暂无发言'
+                    );
                     const avatar = String(expert.avatarDataUrl || '').trim();
                     const avatarHtml = avatar
                         ? `<img class="report-expert-avatar" src="${escapeHtml(avatar)}" alt="">`
@@ -2175,7 +2190,7 @@ const accidentSceneRuntime = {
                         '<div class="report-expert-avatar" style="display:flex;align-items:center;justify-content:center;font-size:28px;color:#777;">?</div>',
                         '<div>',
                         `<div class="report-expert-name">${escapeHtml(item.expertName || item.expertId || '专家')}</div>`,
-                        `<pre class="report-expert-speech">${escapeHtml(item.speech || '暂无发言')}</pre>`,
+                        `<pre class="report-expert-speech">${escapeHtml(withKnowledgeCitation(item.speech || '暂无发言'))}</pre>`,
                         '</div>',
                         '</div>'
                     ].join(''));
