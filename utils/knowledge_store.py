@@ -6,6 +6,9 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
+import stat
+import tempfile
 import uuid
 from datetime import datetime
 
@@ -18,6 +21,7 @@ PACKS_DIRNAME = "packs"
 PLAYBOOK_FILENAME = "playbook.json"
 INDEX_FILENAME = "index.json"
 LEGACY_PACK_FILENAME = "accident_knowledge.json"
+EXAMPLE_TABLE_FILENAME = "ExampleTable.xlsx"
 INDEX_VERSION = 2
 MAX_ACCIDENTS = 1500
 MAX_SIMILAR_CASES = 8
@@ -47,6 +51,31 @@ def playbook_path():
 
 def index_path():
     return os.path.join(knowledge_dir(), INDEX_FILENAME)
+
+
+def example_table_path():
+    return os.path.join(knowledge_dir(), EXAMPLE_TABLE_FILENAME)
+
+
+def prepare_example_table_readonly_copy():
+    src = example_table_path()
+    if not os.path.isfile(src):
+        raise ValueError("未找到精炼表格示例 ExampleTable.xlsx。")
+    dest_dir = os.path.join(tempfile.gettempdir(), "accident_knowledge_example")
+    os.makedirs(dest_dir, exist_ok=True)
+    dest = os.path.join(dest_dir, EXAMPLE_TABLE_FILENAME)
+    try:
+        if os.path.isfile(dest):
+            os.chmod(dest, stat.S_IWRITE)
+            os.remove(dest)
+    except OSError:
+        dest = os.path.join(
+            dest_dir,
+            "ExampleTable_%s.xlsx" % datetime.now().strftime("%Y%m%d_%H%M%S"),
+        )
+    shutil.copyfile(src, dest)
+    os.chmod(dest, stat.S_IREAD)
+    return dest
 
 
 def pack_file_path(pack_id):

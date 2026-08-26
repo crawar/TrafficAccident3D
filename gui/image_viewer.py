@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
     QLabel,
 )
 from PySide6.QtGui import QPixmap, QPen, QColor, QPolygonF, QBrush, QFont, QCursor, QIcon, QPainter
-from PySide6.QtCore import Qt, QPoint, QPointF, Signal, QLineF, QTimer, QEvent
+from PySide6.QtCore import Qt, QPoint, QPointF, Signal, QLineF, QTimer, QEvent, QRectF
 import math
 import numpy as np
 import cv2
@@ -36,6 +36,7 @@ from utils.vehicle_identity import ensure_vehicle_ids, next_vehicle_id
 from gui.vehicle_size_dialog import VehicleSizeDialog
 from gui.lane_width_dialog import LaneWidthDialog
 from gui.motion_path_editor import MotionPathEditorMixin
+from gui.canvas_crop import CanvasCropMixin
 from gui.motion_path_utils import ensure_motion_fields
 from utils.vehicle_appearance import (
     COLOR_MODE_AUTO,
@@ -171,6 +172,12 @@ class VehiclePolygonItem(QGraphicsPolygonItem):
             delta = event.scenePos() - self._press_scene
             self._veh["x_center"] = self._start_center[0] + delta.x()
             self._veh["y_center"] = self._start_center[1] + delta.y()
+            if hasattr(self._viewer, "_clamp_point_to_workspace"):
+                cx, cy = self._viewer._clamp_point_to_workspace(
+                    self._veh["x_center"], self._veh["y_center"]
+                )
+                self._veh["x_center"] = cx
+                self._veh["y_center"] = cy
             self._viewer._refresh_vehicle_polygon(self)
             self._viewer._reposition_handles(self)
             event.accept()
@@ -265,6 +272,12 @@ class MarkerCircleItem(QGraphicsEllipseItem):
             delta = event.scenePos() - self._press_scene
             self._marker["x_center"] = self._start_center[0] + delta.x()
             self._marker["y_center"] = self._start_center[1] + delta.y()
+            if hasattr(self._viewer, "_clamp_point_to_workspace"):
+                cx, cy = self._viewer._clamp_point_to_workspace(
+                    self._marker["x_center"], self._marker["y_center"]
+                )
+                self._marker["x_center"] = cx
+                self._marker["y_center"] = cy
             self.setPos(float(self._marker["x_center"]), float(self._marker["y_center"]))
             self._viewer._refresh_marker_name_label(self)
             self._viewer._sync_selection_overlay(self)
@@ -280,13 +293,16 @@ class MarkerCircleItem(QGraphicsEllipseItem):
         super().mouseReleaseEvent(event)
 
 
-class ImageViewer(MotionPathEditorMixin, QGraphicsView):
+class ImageViewer(CanvasCropMixin, MotionPathEditorMixin, QGraphicsView):
     vehicle_selection_changed = Signal(object)
     # Emits how many vehicles are currently selected (0, 1, or more with Ctrl multi-select),
     # so the host window can show/hide the direction-key hint text.
     vehicle_selection_count_changed = Signal(int)
     # Emitted after vehicles / lanes / markers are added or removed.
     objects_changed = Signal()
+    hint_context_changed = Signal(object)
+    path_edit_state_changed = Signal(bool)
+    path_edit_finished = Signal(float, bool)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -339,7 +355,7 @@ class ImageViewer(MotionPathEditorMixin, QGraphicsView):
         self._lane_width_override = None
         self._auto_fit_image = True
 
-        self.show_all_objects = True
+        self.show_all_objects = False
         self.case_mode = False
 
         # Eyedropper: "body_color" | "cargo_color" | None
@@ -361,6 +377,10 @@ class ImageViewer(MotionPathEditorMixin, QGraphicsView):
         self._breath_timer.timeout.connect(self._tick_breath)
 
         self._init_motion_path_state()
+        self._init_canvas_crop_state()
+        self.setObjectName("editBoard")
+        self.setBackgroundBrush(QBrush(QColor("#0b1220")))
+        self.scene.setBackgroundBrush(QBrush(QColor("#0b1220")))
 
         self.setFocusPolicy(Qt.StrongFocus)
         self.scene.selectionChanged.connect(self._on_selection_changed)
@@ -369,10 +389,20 @@ class ImageViewer(MotionPathEditorMixin, QGraphicsView):
         self.viewport().installEventFilter(self)
 
     def _fit_image_to_view(self):
-        if self._auto_fit_image and self.image_item is not None:
+        if not self._auto_fit_image:
+            return
+        if self.canvas_crop_mode and self.image_item is not None:
+            padded = self._crop_page_scene_rect()
+            self.fitInView(padded, Qt.KeepAspectRatio)
+            self.centerOn(padded.center())
+        elif not self.canvas_crop_mode and self._canvas_crop is not None:
+            fitted = self._edit_page_fit_rect()
+            self.fitInView(fitted, Qt.KeepAspectRatio)
+            self.centerOn(fitted.center())
+        elif self.image_item is not None:
             self.fitInView(self.image_item, Qt.KeepAspectRatio)
-            self._fit_scale = max(self.transform().m11(), 1e-9)
-            self._refresh_all_overlay_labels()
+        self._fit_scale = max(self.transform().m11(), 1e-9)
+        self._refresh_all_overlay_labels()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -504,6 +534,54 @@ class ImageViewer(MotionPathEditorMixin, QGraphicsView):
 
     def _emit_objects_changed(self):
         self.objects_changed.emit()
+        self._emit_hint_context()
+
+    def hint_context(self):
+        lane_count = sum(
+            1 for info in self.items_data.values() if info["type"] == "lane"
+        )
+        selected_vehicles = 0
+        selected_markers = 0
+        selected_lanes = 0
+        if hasattr(self, "scene"):
+            for item in self.scene.selectedItems():
+                info = self.items_data.get(item)
+                if not info:
+                    continue
+                if info["type"] == "vehicle":
+                    selected_vehicles += 1
+                elif info["type"] == "marker":
+                    selected_markers += 1
+                elif info["type"] == "lane":
+                    selected_lanes += 1
+        if self.canvas_crop_mode:
+            mode = "画布裁剪"
+        elif self.case_mode:
+            mode = "事故案情"
+        elif self.motion_mode:
+            mode = "运动"
+        elif self.draw_mode:
+            mode = "道路线"
+        elif self.marker_mode:
+            mode = "标记物"
+        else:
+            mode = "车辆"
+        return {
+            "mode": mode,
+            "crop_mode": bool(self.canvas_crop_mode),
+            "add_vehicle": bool(self.add_vehicle_mode),
+            "add_lane": bool(self.draw_mode and self.lane_draw_enabled),
+            "add_marker": bool(self.marker_mode and self.marker_add_enabled),
+            "lane_count": lane_count,
+            "path_edit": bool(getattr(self, "_path_edit_active", False)),
+            "path_points": len(getattr(self, "_path_edit_points", []) or []),
+            "vehicle_selected": selected_vehicles,
+            "marker_selected": selected_markers,
+            "lane_selected": selected_lanes,
+        }
+
+    def _emit_hint_context(self):
+        self.hint_context_changed.emit(self.hint_context())
 
     def _configure_observation_item(self, item):
         """Labels / arrows / path overlays: visible only, never capture mouse."""
@@ -521,6 +599,8 @@ class ImageViewer(MotionPathEditorMixin, QGraphicsView):
         """True for decorative graphics that must never block hit-testing."""
         if item is None:
             return False
+        if self._is_crop_overlay_item(item):
+            return True
         # Business objects are never observation overlays.
         if item in self.items_data:
             return False
@@ -622,6 +702,10 @@ class ImageViewer(MotionPathEditorMixin, QGraphicsView):
                     return False
         local = self.image_item.mapFromScene(scene_pos)
         br = self.image_item.boundingRect()
+        if getattr(self, "canvas_crop_mode", False):
+            return br.contains(local)
+        if self._canvas_crop is not None:
+            return self._workspace_rect().contains(scene_pos)
         return br.contains(local)
 
     def _begin_pan(self, view_pos, button=None):
@@ -675,7 +759,7 @@ class ImageViewer(MotionPathEditorMixin, QGraphicsView):
 
     def _sync_layer_interactions(self):
         """Only the active dropdown layer accepts mouse; other layers are visual-only."""
-        if self.case_mode:
+        if self.canvas_crop_mode or self.case_mode:
             self._apply_vehicle_pointer_block_for_draw_mode(True)
             self._set_lane_interaction_enabled(False)
             self._set_marker_interaction_enabled(False)
@@ -737,6 +821,7 @@ class ImageViewer(MotionPathEditorMixin, QGraphicsView):
             self.drawing = False
             self.current_line = None
             self.unsetCursor()
+        self._emit_hint_context()
 
     def _raise_lane_items_above_vehicles(self):
         for item, info in self.items_data.items():
@@ -1088,6 +1173,7 @@ class ImageViewer(MotionPathEditorMixin, QGraphicsView):
                 self._add_rect_preview = None
             self._add_rect_start = None
             self.unsetCursor()
+        self._emit_hint_context()
 
     def set_marker_mode(self, enabled):
         self.marker_mode = enabled
@@ -1131,10 +1217,11 @@ class ImageViewer(MotionPathEditorMixin, QGraphicsView):
             self.setCursor(Qt.CrossCursor)
         else:
             self.unsetCursor()
+        self._emit_hint_context()
 
     def _current_mode_type(self):
         """Which item type the active page edits; None for pages with no matching type (e.g. 事故案情)."""
-        if self.case_mode:
+        if self.canvas_crop_mode or self.case_mode:
             return None
         if self.motion_mode:
             return "vehicle"
@@ -1147,12 +1234,18 @@ class ImageViewer(MotionPathEditorMixin, QGraphicsView):
     def _apply_type_visibility(self):
         """Show only the current page's object type unless show_all_objects is on.
 
+        画布裁剪页默认只显示底图与裁剪框，不显示车辆、道路线、标记物或运动路径；
+        仅当用户勾选「显示全部图层」时才叠加上这些对象。
         事故案情页没有对应的对象类型(current_type 为 None),但用户需要看到全部车辆/
         标记物/标线信息才能写出准确的案情描述,因此该页强制按"全部显示"处理,
         与 show_all_objects 勾选框的实际状态无关。
         运动页强制显示车辆（无论勾选与否）；车道/标记仍跟随 show_all_objects。
         「显示全部图层」仅影响可见性；跨图层对象始终不可选、不挡鼠标。
         """
+        if self.canvas_crop_mode:
+            self._apply_type_visibility_crop()
+            self._sync_layer_interactions()
+            return
         if self.motion_mode:
             self._apply_type_visibility_motion()
             self._sync_layer_interactions()
@@ -1160,7 +1253,10 @@ class ImageViewer(MotionPathEditorMixin, QGraphicsView):
         current_type = self._current_mode_type()
         show_all = self.show_all_objects or self.case_mode
         for item, info in self.items_data.items():
-            item.setVisible(show_all or info["type"] == current_type)
+            in_workspace = self.canvas_crop_mode or self._item_in_workspace(item, info)
+            item.setVisible(
+                in_workspace and (show_all or info["type"] == current_type)
+            )
         for vehicle_item, arrow in self._front_arrow_map.items():
             arrow.setVisible(vehicle_item.isVisible())
         for vehicle_item, label in self._vehicle_label_map.items():
@@ -1172,6 +1268,21 @@ class ImageViewer(MotionPathEditorMixin, QGraphicsView):
         if hasattr(self, "_sync_finished_path_overlays"):
             self._sync_finished_path_overlays()
         self._sync_layer_interactions()
+
+    def _apply_type_visibility_crop(self):
+        show_all = bool(self.show_all_objects)
+        for item in self.items_data:
+            item.setVisible(show_all)
+        for vehicle_item, arrow in self._front_arrow_map.items():
+            arrow.setVisible(vehicle_item.isVisible())
+        for vehicle_item, label in self._vehicle_label_map.items():
+            label.setVisible(vehicle_item.isVisible())
+        for marker_item, label in self._marker_label_map.items():
+            label.setVisible(marker_item.isVisible())
+        for lane_item, label in self._lane_label_map.items():
+            label.setVisible(lane_item.isVisible())
+        if hasattr(self, "_sync_finished_path_overlays"):
+            self._sync_finished_path_overlays()
 
     def set_show_all_objects(self, enabled):
         self.show_all_objects = bool(enabled)
@@ -1475,6 +1586,9 @@ class ImageViewer(MotionPathEditorMixin, QGraphicsView):
         return self._sample_image_color_at_scene_xy(local.x(), local.y(), radius=0)
 
     def mousePressEvent(self, event):
+        if self._handle_crop_press(event):
+            self._emit_hint_context()
+            return
         if self._eyedropper_target and event.button() == Qt.LeftButton:
             hex_color = self._sample_image_color_at_view_pos(event.pos())
             if hex_color and self._eyedropper_vehicle is not None:
@@ -1596,8 +1710,11 @@ class ImageViewer(MotionPathEditorMixin, QGraphicsView):
                 return
 
         super().mousePressEvent(event)
+        self._emit_hint_context()
 
     def mouseMoveEvent(self, event):
+        if self._handle_crop_move(event):
+            return
         if self.draw_mode and self._drag_lane and self._lane_drag_O is not None:
             scene_pos = self.mapToScene(event.pos())
             if self._lane_drag_index == 0 and self._lane_drag_press_scene is not None:
@@ -1667,6 +1784,8 @@ class ImageViewer(MotionPathEditorMixin, QGraphicsView):
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
+        if self._handle_crop_release(event):
+            return
         if self.draw_mode and event.button() == Qt.LeftButton and self._drag_lane:
             self._reset_lane_drag_state()
             self.viewport().releaseMouse()
@@ -1748,6 +1867,7 @@ class ImageViewer(MotionPathEditorMixin, QGraphicsView):
                 if r.width() >= 10 and r.height() >= 10:
                     cx = r.x() + r.width() / 2.0
                     cy = r.y() + r.height() / 2.0
+                    cx, cy = self._clamp_point_to_workspace(cx, cy)
                     veh = {
                         "vehicle_id": next_vehicle_id(self._vehicle_data_list()),
                         "class_id": -1,
@@ -1800,11 +1920,12 @@ class ImageViewer(MotionPathEditorMixin, QGraphicsView):
             if not self.marker_add_enabled:
                 super().mouseReleaseEvent(event)
                 return
+            mx, my = self._clamp_point_to_workspace(scene_pos.x(), scene_pos.y())
             marker = {
                 "marker_id": next_marker_id(self._marker_data_list()),
                 "marker_type": DEFAULT_MARKER_TYPE,
-                "x_center": float(scene_pos.x()),
-                "y_center": float(scene_pos.y()),
+                "x_center": float(mx),
+                "y_center": float(my),
             }
             item = self._add_marker_item(marker)
             self.scene.clearSelection()
@@ -1814,6 +1935,7 @@ class ImageViewer(MotionPathEditorMixin, QGraphicsView):
             return
 
         super().mouseReleaseEvent(event)
+        self._emit_hint_context()
 
     def _polygon_from_veh(self, veh):
         x, y, w, h, r = (
@@ -1830,7 +1952,7 @@ class ImageViewer(MotionPathEditorMixin, QGraphicsView):
             polygon.append(QPointF(float(pt[0]), float(pt[1])))
         return polygon
 
-    def load_image_and_data(self, image_path, vehicles, lanes, markers=None):
+    def load_image_and_data(self, image_path, vehicles, lanes, markers=None, canvas_crop=None):
         self.scene.clear()
         self.items_data.clear()
         self._clear_all_handles()
@@ -1839,6 +1961,7 @@ class ImageViewer(MotionPathEditorMixin, QGraphicsView):
         self._marker_label_map.clear()
         self._lane_label_map.clear()
         self._selection_overlay_map.clear()
+        self._clear_crop_overlay_refs()
         if self._breath_timer.isActive():
             self._breath_timer.stop()
         self._reset_lane_drag_state()
@@ -1847,6 +1970,7 @@ class ImageViewer(MotionPathEditorMixin, QGraphicsView):
         self.image_item = self.scene.addPixmap(pixmap)
         self.image_item.setZValue(-1)
         self.image_item.setAcceptedMouseButtons(Qt.NoButton)
+        self.set_canvas_crop(canvas_crop)
 
         for lane in lanes:
             x1, y1, x2, y2 = self._extend_line_to_image_bounds(
@@ -2063,15 +2187,18 @@ class ImageViewer(MotionPathEditorMixin, QGraphicsView):
                 self,
                 "已更新本图车道宽",
                 "本图车道宽与应急车道宽已更新，已删除全部已规划车道线。"
-                "请重新规划车道线。该设置不会影响建模预览中的通用设置。",
+                "请从应急车道外侧开始重新规划车道线。该设置不会影响建模预览中的通用设置。",
             )
         else:
             QMessageBox.information(
                 self,
                 "已更新本图车道宽",
-                "本图车道宽与应急车道宽已更新。请规划车道线。"
+                "本图车道宽与应急车道宽已更新。请从应急车道外侧开始规划第1条线。"
                 "该设置不会影响建模预览中的通用设置。",
             )
+
+    def open_lane_width_dialog(self):
+        self._open_lane_width_dialog()
 
     def _open_vehicle_size_dialog(self, vehicle_item, veh):
         preset_type = str(veh.get("preset_type", "") or "小客车")
@@ -2108,6 +2235,7 @@ class ImageViewer(MotionPathEditorMixin, QGraphicsView):
         ):
             if self._delete_breathing_path_point():
                 event.accept()
+                self._emit_hint_context()
                 return
         if self.motion_mode and (
             event.key() == Qt.Key_Delete or event.key() == Qt.Key_Backspace
@@ -2133,6 +2261,7 @@ class ImageViewer(MotionPathEditorMixin, QGraphicsView):
                     self._refresh_vehicle_front_arrow(item)
                     self._update_vehicle_front_arrow_tooltip(item)
                 event.accept()
+                self._emit_hint_context()
                 return
         if event.key() == Qt.Key_Delete or event.key() == Qt.Key_Backspace:
             selected_items = list(self.scene.selectedItems())
@@ -2169,6 +2298,7 @@ class ImageViewer(MotionPathEditorMixin, QGraphicsView):
             self._on_selection_changed()
             self._emit_objects_changed()
         super().keyPressEvent(event)
+        self._emit_hint_context()
 
     def keyReleaseEvent(self, event):
         if event.key() == Qt.Key_Space:
@@ -2553,6 +2683,7 @@ class ImageViewer(MotionPathEditorMixin, QGraphicsView):
         else:
             QToolTip.hideText()
             self.vehicle_selection_changed.emit(None)
+        self._emit_hint_context()
 
     def _make_selection_overlay_pen(self, alpha):
         color = QColor(SELECTION_OVERLAY_COLOR)

@@ -131,6 +131,18 @@ def _verify_packed_knowledge(project_dir, app_out):
         elif os.path.isfile(dst_path):
             print(f"[OK] knowledge\\{name}")
 
+    example_name = "ExampleTable.xlsx"
+    src_example = os.path.join(src_dir, example_name)
+    dst_example = os.path.join(dst_dir, example_name)
+    if not os.path.isfile(src_example):
+        print("[ERROR] Missing source knowledge\\ExampleTable.xlsx")
+        failed = True
+    elif not os.path.isfile(dst_example):
+        print("[ERROR] Missing knowledge\\ExampleTable.xlsx")
+        failed = True
+    else:
+        print("[OK] knowledge\\ExampleTable.xlsx")
+
     src_packs = os.path.join(src_dir, "packs")
     dst_packs = os.path.join(dst_dir, "packs")
     src_files = []

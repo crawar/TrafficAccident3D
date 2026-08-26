@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 
 from PySide6.QtWidgets import (
     QApplication,
@@ -8,16 +9,31 @@ from PySide6.QtWidgets import (
     QPushButton,
     QMessageBox,
     QLabel,
-    QComboBox,
     QCheckBox,
     QProgressDialog,
     QProgressBar,
-    QStyledItemDelegate,
-    QStyleOptionViewItem,
     QToolTip,
+    QFrame,
+    QSizePolicy,
+    QWidget,
+    QButtonGroup,
 )
 from PySide6.QtCore import Qt, QUrl, QTimer, QThread, Signal, QEvent
-from PySide6.QtGui import QDesktopServices, QColor, QPalette, QCursor
+from PySide6.QtGui import QDesktopServices, QCursor
+
+from gui.app_styles import (
+    ADD_BTN_ACTIVE_STYLE,
+    BOARD_WINDOW_QSS,
+    CACHE_BTN_FLASH_QSS,
+    HISTORY_BTN_STYLE,
+    LEFT_HINT_COL_W,
+    PRIMARY_BTN_STYLE,
+    RIGHT_TOOL_COL_W,
+    SAVE_EDIT_BTN_STYLE,
+    STATUS_PANEL_ERROR_QSS,
+    STATUS_PANEL_IDLE_QSS,
+    STATUS_PANEL_SUCCESS_QSS,
+)
 from gui.image_viewer import ImageViewer
 from gui.accident_brief_panel import AccidentBriefPanel
 from utils.ai_settings import ai_liability_enabled, ai_request_config
@@ -26,14 +42,16 @@ from utils.html_generator import generate_html
 from utils.liability_ai import build_liability_context, request_liability_analysis
 from utils.measurement_save_server import start_measurement_save_server
 
+CROP_MODE_LABEL = "画布裁剪"
 CASE_BRIEF_MODE_LABEL = "事故案情"
 MOTION_MODE_LABEL = "运动"
-REQUIRED_MODE_LABELS = ("车辆", "道路线")
-_GENERATE_ENABLED_STYLE = (
-    "font-size: 16px; font-weight: bold; background-color: #4CAF50; color: white;"
-)
-_GENERATE_DISABLED_STYLE = (
-    "font-size: 16px; font-weight: bold; background-color: #9e9e9e; color: #eeeeee;"
+EDIT_MODE_PAGES = (
+    (CROP_MODE_LABEL, CROP_MODE_LABEL, False),
+    ("车辆", "车辆*", True),
+    ("道路线", "道路线*", True),
+    ("标记物", "标记物", False),
+    (MOTION_MODE_LABEL, MOTION_MODE_LABEL, False),
+    (CASE_BRIEF_MODE_LABEL, CASE_BRIEF_MODE_LABEL, False),
 )
 _AI_DISABLED_TOOLTIP = "请先在系统设置中开启AI分析责任"
 _PREPARE_STATUS_STEPS = (
@@ -43,7 +61,20 @@ _PREPARE_STATUS_STEPS = (
     "AI责任正在划定……",
     "AI专家正在思考……",
 )
+_GOAL_HINTS = {
+    "画布裁剪": "选出最终三维场景展示的范围。打开时默认是原图短边的正方形，之后可拉成任意矩形。框外变暗，抓住框拖动或拖边角缩放，框不能超出原图。",
+    "车辆": "校对每辆车的位置、朝向、车型与尺寸，保证框住真实车辆。",
+    "道路线": "从应急车道外侧开始规划全部车道线：第1、2条间距是应急车道宽，之后是普通车道宽。",
+    "标记物": "在现场补上锥桶、人员、导向牌、公里牌、散落物或碰撞点。",
+    "运动": "为相关车辆设置事发前后的行驶路径和速度。",
+    "事故案情": "用车辆ID简述经过，供AI辅助分析。可拖动浮窗以免挡住画布。",
+}
 _SHORTCUTS_HELP_TEXT = (
+    "【画布裁剪】\n"
+    "· 按住裁剪框拖动：框跟随鼠标移动\n"
+    "· 拖动四角或四边：自由改变宽高（不必保持 1:1）\n"
+    "· 框不能超出原图；打开时默认是原图短边居中的正方形\n"
+    "\n"
     "【视图缩放与平移】\n"
     "· Alt + 滚轮上：放大图片（缩小可视范围）\n"
     "· Alt + 滚轮下：缩小图片（扩大可视范围）\n"
@@ -56,11 +87,11 @@ _SHORTCUTS_HELP_TEXT = (
     "· 选中车辆 / 道路线后滚轮：旋转\n"
     "· 选中车辆后 ← / →：旋转方向标识\n"
     "· Delete 或右键菜单：删除选中对象\n"
-    "· 点击「新增」后拖拽 / 单击：新增当前模式下的对象\n"
+    "· 点击「新增车辆/车道线/标记物」后拖拽 / 单击：新增当前模式下的对象\n"
     "\n"
     "【运动路径】\n"
     "· 右键车辆：「设置路径」/「设置速度」\n"
-    "· 路径绘制中左键空白处加点；右键空白处结束并连到车心\n"
+    "· 路径绘制中左键空白处加点；右键空白处或点「结束路径」结束并连到车心\n"
     "· Delete：删除当前呼吸中的路径点（仅可从后往前删）\n"
     "· 路径绘制中滚轮：切换当前呼吸点前进(G)/倒退(F)\n"
     "· 预估超过 30 秒的路径呈红色\n"
@@ -75,25 +106,78 @@ def _edit_mode_key(text):
     raw = str(text or "").strip()
     while raw.startswith("*"):
         raw = raw[1:].strip()
+    while raw.endswith("*"):
+        raw = raw[:-1].strip()
     return raw
 
 
-class RequiredModeDelegate(QStyledItemDelegate):
-    def __init__(self, required_rows, parent=None):
-        super().__init__(parent)
-        self.required_rows = set(required_rows)
-
-    def paint(self, painter, option, index):
-        if index.row() in self.required_rows:
-            opt = QStyleOptionViewItem(option)
-            self.initStyleOption(opt, index)
-            opt.palette.setColor(QPalette.ColorRole.Text, QColor(220, 0, 0))
-            opt.palette.setColor(
-                QPalette.ColorRole.HighlightedText, QColor(255, 80, 80)
+def _next_hint_from_context(ctx):
+    ctx = ctx or {}
+    mode = ctx.get("mode") or "车辆"
+    if mode == "画布裁剪":
+        return (
+            "下一步：按住裁剪框拖动，鼠标往哪框就往哪；"
+            "拖四角或四边改大小（可不成正方形）。Alt+滚轮只缩放视图，不改裁剪。"
+        )
+    if ctx.get("add_vehicle"):
+        return "下一步：在工作区内按住左键拖出车辆框；可连续添加。完成后点「完成新增」。"
+    if ctx.get("add_lane"):
+        lane_count = int(ctx.get("lane_count") or 0)
+        if lane_count <= 0:
+            return "下一步：从应急车道外侧按住左键拖出第1条线（应急车道外边界）。"
+        if lane_count == 1:
+            return "下一步：画第2条线。它与第1条的间距 = 应急车道宽。"
+        return (
+            f"下一步：继续画第{lane_count + 1}条快车道分界线。"
+            "会自动平行，间距 = 普通车道宽。完成后点「完成新增」。"
+        )
+    if ctx.get("add_marker"):
+        return "下一步：在工作区内左键单击放置标记物；可连续添加。完成后点「完成新增」。"
+    if mode == "道路线":
+        lane_count = int(ctx.get("lane_count") or 0)
+        if ctx.get("lane_selected"):
+            return (
+                "已选中车道线：滚轮旋转整组；拖第1条平移整组；拖第2条改应急车道间距；"
+                "Delete 只能删最后一条。也可点「设置车道宽」。"
             )
-            super().paint(painter, opt, index)
-            return
-        super().paint(painter, option, index)
+        if lane_count <= 0:
+            return (
+                "本页从应急车道开始。先点「设置车道宽」（可选），再点「新增车道线」，"
+                "从应急车道外侧画第1条线。"
+            )
+        if lane_count == 1:
+            return "已有第1条线。点「新增车道线」画第2条，两线间距为应急车道宽。"
+        return (
+            f"已有{lane_count}条线。点「新增车道线」继续画快车道；"
+            "拖第1条平移整组，拖第2条改应急间距。"
+        )
+    if mode == "车辆":
+        if ctx.get("vehicle_selected"):
+            return (
+                "已选中车辆：拖动移动，拖黄角缩放，滚轮旋转车框；"
+                "← / → 旋转方向标识；Delete 删除。右键可改车型、尺寸和颜色。"
+            )
+        return (
+            "下一步：单击选中车辆进行校对；或点「新增车辆」后拖出新框。"
+            "Alt+滚轮缩放，空白处拖动平移。"
+        )
+    if mode == "标记物":
+        if ctx.get("marker_selected"):
+            return "已选中标记：拖动移动；右键改类型；Delete 删除。"
+        return "下一步：拖动已有标记，或点「新增标记物」后左键单击放置。"
+    if mode == "运动":
+        if ctx.get("path_edit"):
+            points = int(ctx.get("path_points") or 0)
+            return (
+                f"正在画路径（已有{points}点）：左键加点，滚轮切换前进G/倒退F，"
+                "Delete 删最后一点。右键空白或点「结束路径」完成并连到车心。"
+            )
+        if ctx.get("vehicle_selected"):
+            return "已选中车辆：右键选择「设置路径」或「设置速度」。本页不能拖动车框。"
+        return "下一步：单击选中车辆，再右键「设置路径」或「设置速度」。"
+    if mode == "事故案情":
+        return "下一步：在浮窗里用车辆ID写案情，例如「车辆1追尾车辆2」。可拖标题栏挪开浮窗。"
+    return "按右侧按钮选择子页，在中央画布上编辑。"
 
 
 class LiabilityAnalysisThread(QThread):
@@ -109,6 +193,7 @@ class LiabilityAnalysisThread(QThread):
         accident_brief="",
         lane_width_settings=None,
         markers=None,
+        canvas_crop=None,
     ):
         super().__init__()
         self.image_path = image_path
@@ -118,6 +203,7 @@ class LiabilityAnalysisThread(QThread):
         self.accident_brief = accident_brief or ""
         self.lane_width_settings = lane_width_settings
         self.markers = markers or []
+        self.canvas_crop = canvas_crop
 
     def run(self):
         try:
@@ -128,6 +214,7 @@ class LiabilityAnalysisThread(QThread):
                 self.accident_brief,
                 lane_width_settings=self.lane_width_settings,
                 markers=self.markers,
+                canvas_crop=self.canvas_crop,
             )
             ai_analysis = request_liability_analysis(self.ai_settings, liability_context)
             self.finished.emit(ai_analysis, liability_context)
@@ -147,11 +234,13 @@ class ResultWindow(QDialog):
         ai_settings=None,
     ):
         super().__init__(parent)
+        self.setObjectName("resultBoard")
         self.setWindowTitle("结果确认与编辑")
+        self.setStyleSheet(BOARD_WINDOW_QSS)
 
         screen = parent.screen() if parent else QApplication.primaryScreen()
         available = screen.availableGeometry()
-        self.resize(int(available.width() * 0.8), int(available.height() * 0.8))
+        self.resize(int(available.width() * 0.92), int(available.height() * 0.9))
         self.move(available.center() - self.rect().center())
 
         self.image_path = image_path
@@ -168,11 +257,9 @@ class ResultWindow(QDialog):
         self._prepare_status_timer.setInterval(5000)
         self._prepare_status_timer.timeout.connect(self._advance_prepare_status)
         self._selected_veh = None
-        self._base_hint_text = ""
-        self._add_btn_flow_step = 0
-        self._add_btn_flow_timer = QTimer(self)
-        self._add_btn_flow_timer.setInterval(140)
-        self._add_btn_flow_timer.timeout.connect(self._update_add_vehicle_button_flow)
+        self._status_idle_timer = QTimer(self)
+        self._status_idle_timer.setSingleShot(True)
+        self._status_idle_timer.timeout.connect(self._restore_status_panel_style)
         self._initial_accident_brief = str(
             self.cached_annotation.get("accident_brief", "") or ""
         )
@@ -185,39 +272,194 @@ class ResultWindow(QDialog):
             return self.accident_panel.text()
         return self._initial_accident_brief
 
+    def _make_hint_panel(self, object_name, title, body_name):
+        frame = QFrame()
+        frame.setObjectName(object_name)
+        layout = QVBoxLayout(frame)
+        layout.setContentsMargins(12, 10, 12, 12)
+        layout.setSpacing(6)
+        title_label = QLabel(title)
+        title_label.setObjectName("hintTitle")
+        body = QLabel()
+        body.setObjectName(body_name)
+        body.setWordWrap(True)
+        body.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+        body.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
+        layout.addWidget(title_label)
+        layout.addWidget(body, stretch=1)
+        return frame, body
+
+    def _lock_panel_to_contents(self, frame):
+        layout = frame.layout()
+        if layout is None:
+            return
+        frame.ensurePolished()
+        margins = layout.contentsMargins()
+        height = margins.top() + margins.bottom()
+        widgets = []
+        for index in range(layout.count()):
+            widget = layout.itemAt(index).widget()
+            if widget is None:
+                continue
+            widget.ensurePolished()
+            widgets.append(widget)
+        if widgets:
+            height += sum(
+                max(widget.sizeHint().height(), widget.minimumHeight())
+                for widget in widgets
+            )
+            height += layout.spacing() * (len(widgets) - 1)
+        frame.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        frame.setFixedHeight(height)
+
+    def _style_tool_button(self, button, primary=False, save_edit=False):
+        button.setAutoDefault(False)
+        button.setDefault(False)
+        button.setMinimumWidth(RIGHT_TOOL_COL_W - 24)
+        if primary:
+            button.setStyleSheet(PRIMARY_BTN_STYLE)
+        elif save_edit:
+            button.setStyleSheet(SAVE_EDIT_BTN_STYLE)
+        else:
+            button.setStyleSheet(HISTORY_BTN_STYLE)
+
     def init_ui(self):
-        self.main_layout = QVBoxLayout(self)
+        self.main_layout = QHBoxLayout(self)
+        self.main_layout.setContentsMargins(12, 12, 12, 12)
+        self.main_layout.setSpacing(10)
 
-        self.toolbar_layout = QHBoxLayout()
+        left = QWidget()
+        left.setFixedWidth(LEFT_HINT_COL_W)
+        left_layout = QVBoxLayout(left)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(10)
 
-        self.mode_label = QLabel("编辑模式:")
-        self.toolbar_layout.addWidget(self.mode_label)
-        self.mode_combo = QComboBox()
-        self.mode_combo.addItems(
-            ["*车辆", "*道路线", "标记物", MOTION_MODE_LABEL, CASE_BRIEF_MODE_LABEL]
+        self.next_panel, self.next_hint_label = self._make_hint_panel(
+            "hintPanel", "当前提示", "hintBody"
         )
-        self._mode_delegate = RequiredModeDelegate({0, 1}, self.mode_combo)
-        self.mode_combo.setItemDelegate(self._mode_delegate)
-        self.mode_combo.currentTextChanged.connect(self.on_edit_mode_changed)
-        self.toolbar_layout.addWidget(self.mode_combo)
+        self.status_panel, self.status_hint_label = self._make_hint_panel(
+            "statusPanel", "状态提示", "statusBody"
+        )
+        self.goal_panel, self.goal_hint_label = self._make_hint_panel(
+            "goalPanel", "目的提示", "goalBody"
+        )
+        left_layout.addWidget(self.next_panel, stretch=3)
+        left_layout.addWidget(self.status_panel, stretch=2)
+        left_layout.addWidget(self.goal_panel, stretch=2)
+        self.main_layout.addWidget(left)
 
-        self.add_vehicle_btn = QPushButton("新增")
-        self.add_vehicle_btn.setAutoDefault(False)
-        self.add_vehicle_btn.setDefault(False)
+        self.viewer = ImageViewer()
+        self.viewer.vehicle_selection_changed.connect(self.on_vehicle_selection_changed)
+        self.viewer.vehicle_selection_count_changed.connect(
+            self.on_vehicle_selection_count_changed
+        )
+        self.viewer.objects_changed.connect(self._refresh_generate_enabled)
+        self.viewer.hint_context_changed.connect(self.on_hint_context_changed)
+        self.viewer.path_edit_state_changed.connect(self.on_path_edit_state_changed)
+        self.viewer.path_edit_finished.connect(self.on_path_edit_finished)
+        self.main_layout.addWidget(self.viewer, stretch=1)
+
+        self.viewer.apply_lane_width_settings_from_cache(
+            self.cached_annotation.get("lane_width_settings")
+        )
+        self.viewer.load_image_and_data(
+            self.image_path,
+            self.vehicles,
+            self.lanes,
+            self.markers,
+            canvas_crop=self.cached_annotation.get("canvas_crop"),
+        )
+        self.viewer.set_show_all_objects(False)
+
+        right = QWidget()
+        right.setFixedWidth(RIGHT_TOOL_COL_W)
+        right_layout = QVBoxLayout(right)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(10)
+
+        mode_panel = QFrame()
+        mode_panel.setObjectName("modeSelectPanel")
+        mode_layout = QVBoxLayout(mode_panel)
+        mode_layout.setContentsMargins(12, 10, 12, 12)
+        mode_layout.setSpacing(6)
+
+        mode_caption = QLabel("子编辑页")
+        mode_caption.setObjectName("modeSelectCaption")
+        mode_layout.addWidget(mode_caption)
+
+        self.mode_group = QButtonGroup(self)
+        self.mode_group.setExclusive(True)
+        self._mode_buttons = {}
+        self._active_mode_key = CROP_MODE_LABEL
+        for key, label, required in EDIT_MODE_PAGES:
+            btn = QPushButton(label)
+            btn.setObjectName("modeItem")
+            btn.setCheckable(True)
+            btn.setAutoDefault(False)
+            btn.setDefault(False)
+            btn.setFlat(True)
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setProperty("modeKey", key)
+            btn.setProperty("requiredMode", "true" if required else "false")
+            btn.setFixedHeight(32)
+            self.mode_group.addButton(btn)
+            self._mode_buttons[key] = btn
+            mode_layout.addWidget(btn)
+        self._mode_buttons[CROP_MODE_LABEL].setChecked(True)
+        self.mode_group.buttonClicked.connect(self._on_mode_button_clicked)
+        self.mode_panel = mode_panel
+        right_layout.addWidget(mode_panel, alignment=Qt.AlignTop)
+
+        tool = QFrame()
+        tool.setObjectName("toolPanel")
+        tool.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
+        tool_layout = QVBoxLayout(tool)
+        tool_layout.setContentsMargins(12, 10, 12, 10)
+        tool_layout.setSpacing(6)
+
+        self.add_vehicle_btn = QPushButton("新增车辆")
         self.add_vehicle_btn.setCheckable(True)
         self.add_vehicle_btn.clicked.connect(self.on_add_toggled)
-        self.toolbar_layout.addWidget(self.add_vehicle_btn)
-        self._set_add_vehicle_button_idle_style()
-        self._refresh_add_button_text()
+        self._style_tool_button(self.add_vehicle_btn)
+        tool_layout.addWidget(self.add_vehicle_btn)
+
+        self.reset_crop_btn = QPushButton("重置裁剪")
+        self.reset_crop_btn.clicked.connect(self.on_reset_crop)
+        self._style_tool_button(self.reset_crop_btn)
+        tool_layout.addWidget(self.reset_crop_btn)
+
+        self.lane_width_btn = QPushButton("设置车道宽")
+        self.lane_width_btn.clicked.connect(self.on_lane_width)
+        self._style_tool_button(self.lane_width_btn)
+        tool_layout.addWidget(self.lane_width_btn)
+
+        self.finish_path_btn = QPushButton("结束路径")
+        self.finish_path_btn.clicked.connect(self.on_finish_path)
+        self._style_tool_button(self.finish_path_btn)
+        self.finish_path_btn.setEnabled(False)
+        tool_layout.addWidget(self.finish_path_btn)
+
+        self.shortcuts_btn = QPushButton("快捷键")
+        self.shortcuts_btn.clicked.connect(self.on_show_shortcuts)
+        self._style_tool_button(self.shortcuts_btn)
+        tool_layout.addWidget(self.shortcuts_btn)
+
+        tool_layout.addStretch(1)
+        self.tool_panel = tool
+        right_layout.addWidget(tool, stretch=1)
+
+        confirm = QFrame()
+        confirm.setObjectName("confirmPanel")
+        confirm_layout = QVBoxLayout(confirm)
+        confirm_layout.setContentsMargins(12, 10, 12, 12)
+        confirm_layout.setSpacing(8)
 
         self.show_all_checkbox = QCheckBox("显示全部图层")
-        self.show_all_checkbox.setChecked(True)
+        self.show_all_checkbox.setChecked(False)
         self.show_all_checkbox.toggled.connect(self.on_show_all_toggled)
-        self.toolbar_layout.addWidget(self.show_all_checkbox)
+        confirm_layout.addWidget(self.show_all_checkbox)
 
         self.run_ai_checkbox = QCheckBox("本次启用AI分析")
-        # This is intentionally session-only. The persistent AI setting only
-        # supplies the initial state each time this window is opened.
         system_ai_enabled = bool(
             self.ai_settings.get("enableLiabilityAnalysis", False)
         )
@@ -227,79 +469,36 @@ class ResultWindow(QDialog):
             self.run_ai_checkbox.setEnabled(False)
             self.run_ai_checkbox.setToolTip(_AI_DISABLED_TOOLTIP)
         self.run_ai_checkbox.installEventFilter(self)
-        self.toolbar_layout.addWidget(self.run_ai_checkbox)
+        confirm_layout.addWidget(self.run_ai_checkbox)
 
-        self.cache_only_btn = QPushButton("仅缓存")
-        self.cache_only_btn.setAutoDefault(False)
-        self.cache_only_btn.setDefault(False)
+        self.cache_only_btn = QPushButton("保存编辑")
         self.cache_only_btn.clicked.connect(self.on_cache_only)
-        self.toolbar_layout.addWidget(self.cache_only_btn)
+        self._style_tool_button(self.cache_only_btn, save_edit=True)
+        confirm_layout.addWidget(self.cache_only_btn)
 
-        self.toolbar_layout.addStretch(1)
+        self.generate_btn = QPushButton("识别确认")
+        self.generate_btn.clicked.connect(self.on_generate)
+        self.generate_btn.installEventFilter(self)
+        self._style_tool_button(self.generate_btn, primary=True)
+        confirm_layout.addWidget(self.generate_btn)
 
-        self.shortcuts_btn = QPushButton("快捷键")
-        self.shortcuts_btn.setAutoDefault(False)
-        self.shortcuts_btn.setDefault(False)
-        self.shortcuts_btn.clicked.connect(self.on_show_shortcuts)
-        self.toolbar_layout.addWidget(self.shortcuts_btn)
-        self._shortcuts_blink_on = False
-        self._shortcuts_blink_timer = QTimer(self)
-        self._shortcuts_blink_timer.setInterval(500)
-        self._shortcuts_blink_timer.timeout.connect(self._tick_shortcuts_blink)
-        self._shortcuts_blink_timer.start()
-        self._update_shortcuts_btn_style()
-
-        self.main_layout.addLayout(self.toolbar_layout)
-
-        self.viewer = ImageViewer()
-        self.viewer.vehicle_selection_changed.connect(self.on_vehicle_selection_changed)
-        self.viewer.vehicle_selection_count_changed.connect(
-            self.on_vehicle_selection_count_changed
-        )
-        self.viewer.objects_changed.connect(self._refresh_generate_enabled)
-        self.main_layout.addWidget(self.viewer, stretch=1)
-
-        self.viewer.apply_lane_width_settings_from_cache(
-            self.cached_annotation.get("lane_width_settings")
-        )
-        self.viewer.load_image_and_data(
-            self.image_path, self.vehicles, self.lanes, self.markers
-        )
-        self.viewer.set_show_all_objects(True)
+        self.confirm_panel = confirm
+        right_layout.addWidget(confirm, alignment=Qt.AlignBottom)
+        self.main_layout.addWidget(right)
+        self._lock_panel_to_contents(self.mode_panel)
+        self._lock_panel_to_contents(self.confirm_panel)
 
         self.accident_panel = AccidentBriefPanel(self)
         self.accident_panel.set_text(self._initial_accident_brief)
         self.accident_panel.hide()
 
-        self.generate_btn = QPushButton("识别确认")
-        self.generate_btn.setFixedSize(200, 50)
-        # Inside a QDialog, autoDefault buttons can steal Enter from nested
-        # dialogs and close/trigger this window unexpectedly.
-        self.generate_btn.setAutoDefault(False)
-        self.generate_btn.setDefault(False)
-        self.generate_btn.setStyleSheet(_GENERATE_ENABLED_STYLE)
-        self.generate_btn.clicked.connect(self.on_generate)
-        self.generate_btn.installEventFilter(self)
-
-        self.generate_layout = QHBoxLayout()
-        self.generate_layout.addStretch(1)
-        self.generate_layout.addWidget(self.generate_btn)
-        self.generate_layout.addStretch(1)
-        self.main_layout.addLayout(self.generate_layout)
-
-        self.hint_label = QLabel()
-        self._set_default_hint()
-        self.hint_label.setStyleSheet("color: #d32f2f; font-weight: bold;")
-        self.hint_label.setWordWrap(True)
-        self.hint_label.setAlignment(Qt.AlignCenter)
-        self.main_layout.addWidget(self.hint_label)
-
         self._refresh_generate_enabled()
-        self._update_mode_combo_style()
+        self._refresh_mode_item_styles()
+        self._refresh_mode_actions()
+        self._set_status("画板已打开。请先在「画布裁剪」选定展示范围，再校对车辆与道路线。")
+        self.on_edit_mode_changed(CROP_MODE_LABEL)
 
     def eventFilter(self, obj, event):
-        # init_ui may deliver events after run_ai_checkbox installs this filter
-        # but before generate_btn exists; guard both targets.
         if (
             hasattr(self, "run_ai_checkbox")
             and obj is self.run_ai_checkbox
@@ -319,31 +518,32 @@ class ResultWindow(QDialog):
                 QToolTip.showText(QCursor.pos(), tip, self.generate_btn)
         return super().eventFilter(obj, event)
 
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if self.accident_panel.isVisible():
+            self._place_accident_panel()
+
     def on_show_shortcuts(self):
         QMessageBox.information(self, "快捷键说明", _SHORTCUTS_HELP_TEXT)
 
-    def _tick_shortcuts_blink(self):
-        self._shortcuts_blink_on = not self._shortcuts_blink_on
-        self._update_shortcuts_btn_style()
+    def _current_mode_key(self):
+        btn = self.mode_group.checkedButton() if hasattr(self, "mode_group") else None
+        if btn is None:
+            return getattr(self, "_active_mode_key", CROP_MODE_LABEL)
+        return _edit_mode_key(btn.property("modeKey") or btn.text())
 
-    def _update_shortcuts_btn_style(self):
-        color = "#d32f2f" if self._shortcuts_blink_on else "#222222"
-        self.shortcuts_btn.setStyleSheet(
-            "QPushButton {"
-            f"color: {color};"
-            "font-weight: bold;"
-            "padding: 6px 12px;"
-            "}"
-        )
+    def _on_mode_button_clicked(self, button):
+        key = _edit_mode_key(button.property("modeKey") or button.text())
+        if key == getattr(self, "_active_mode_key", None):
+            return
+        self.on_edit_mode_changed(key)
 
-    def _update_mode_combo_style(self):
-        key = _edit_mode_key(self.mode_combo.currentText())
-        if key in REQUIRED_MODE_LABELS:
-            self.mode_combo.setStyleSheet(
-                "QComboBox { color: #d32f2f; font-weight: bold; }"
-            )
-        else:
-            self.mode_combo.setStyleSheet("")
+    def _refresh_mode_item_styles(self):
+        for btn in self._mode_buttons.values():
+            style = btn.style()
+            style.unpolish(btn)
+            style.polish(btn)
+            btn.update()
 
     def _refresh_generate_enabled(self):
         if not hasattr(self, "generate_btn"):
@@ -352,15 +552,13 @@ class ResultWindow(QDialog):
         has_vehicle = bool(vehicles)
         has_lane = bool(lanes)
         enabled = has_vehicle and has_lane
-        # Keep disabled while AI analysis is in progress.
         if self.ai_thread is not None and self.ai_thread.isRunning():
             return
         self.generate_btn.setEnabled(enabled)
+        self.generate_btn.setStyleSheet(PRIMARY_BTN_STYLE)
         if enabled:
-            self.generate_btn.setStyleSheet(_GENERATE_ENABLED_STYLE)
             self.generate_btn.setToolTip("")
         else:
-            self.generate_btn.setStyleSheet(_GENERATE_DISABLED_STYLE)
             if not has_vehicle and not has_lane:
                 tip = "请先添加至少一辆车和一条道路线后再识别确认"
             elif not has_vehicle:
@@ -369,120 +567,112 @@ class ResultWindow(QDialog):
                 tip = "请先添加至少一条道路线（必填）后再识别确认"
             self.generate_btn.setToolTip(tip)
 
-    # 车辆选中期间会临时显示方向键提示,因此普通提示需要先存到 _base_hint_text,
-    # 取消选中后再恢复,而不是直接写 hint_label。
-    def _set_hint(self, text):
-        self._base_hint_text = text
-        self.hint_label.setText(text)
+    def _set_status(self, text, kind="info"):
+        self.status_hint_label.setText(text)
+        if kind == "success":
+            self.status_panel.setStyleSheet(STATUS_PANEL_SUCCESS_QSS)
+            self._status_idle_timer.start(800)
+        elif kind == "error":
+            self.status_panel.setStyleSheet(STATUS_PANEL_ERROR_QSS)
+            self._status_idle_timer.start(1600)
+        else:
+            self.status_panel.setStyleSheet(STATUS_PANEL_IDLE_QSS)
 
-    def _set_default_hint(self):
-        self._set_hint(
-            "车辆: 选中车辆后可拖拽移动、拖黄色角点缩放、滚轮旋转；点击「新增」后拖拽可新增选框。"
-            "Alt+滚轮缩放；图片放大后可左键拖空白处平移；中键或空格+空白处左键也可平移。"
-        )
+    def _restore_status_panel_style(self):
+        self.status_panel.setStyleSheet(STATUS_PANEL_IDLE_QSS)
+        if hasattr(self, "cache_only_btn"):
+            self.cache_only_btn.setStyleSheet(SAVE_EDIT_BTN_STYLE)
 
-    def _set_add_vehicle_hint(self):
-        self._set_hint(
-            "新增: 在图像上按住左键拖拽生成选框；新增后可继续拖拽添加多个，完成后再次点击「退出新增」退出。"
-        )
+    def _set_goal_hint(self, text):
+        self.goal_hint_label.setText(text)
 
-    def _set_draw_hint(self):
-        self._set_hint(
-            "道路线: 拖动已有车道线可调整整组平行间距，选中车道线后滚轮可旋转整组线，右键或 Delete 可删除最后一根车道线。"
-            "若要新增车道线，请点击「新增」后再拖拽绘制。"
-            "Alt+滚轮缩放；图片放大后可左键拖空白处平移。"
-        )
-
-    def _set_add_lane_hint(self):
-        self._set_hint(
-            "新增: 在图像上按住左键拖拽绘制车道线，可连续画多根；完成后再次点击「退出新增」退出。"
-        )
-
-    def _set_marker_hint(self):
-        self._set_hint(
-            "标记物: 拖动已有标记可移动，右键可设置为安全椎桶、成年人或导向牌，选中后按 Delete 删除。"
-            "若要新增标记物，请点击「新增」后再左键单击。"
-            "Alt+滚轮缩放；图片放大后可左键拖空白处平移。"
-        )
-
-    def _set_add_marker_hint(self):
-        self._set_hint(
-            "新增: 在图像上左键单击添加圆形标记，可连续添加多个；完成后再次点击「退出新增」退出。"
-        )
+    def on_hint_context_changed(self, ctx):
+        self.next_hint_label.setText(_next_hint_from_context(ctx))
 
     def _current_add_label(self):
-        return ("新增对象", "退出新增")
+        mode = self._current_mode_key()
+        idle = {
+            "车辆": "新增车辆",
+            "道路线": "新增车道线",
+            "标记物": "新增标记物",
+        }.get(mode, "新增对象")
+        return (idle, "完成新增")
 
     def _refresh_add_button_text(self):
         idle, active = self._current_add_label()
         self.add_vehicle_btn.setText(active if self.add_vehicle_btn.isChecked() else idle)
+        if self.add_vehicle_btn.isChecked():
+            self.add_vehicle_btn.setStyleSheet(ADD_BTN_ACTIVE_STYLE)
+        else:
+            self.add_vehicle_btn.setStyleSheet(HISTORY_BTN_STYLE)
 
-    def _set_add_vehicle_button_idle_style(self):
-        self.add_vehicle_btn.setStyleSheet(
-            "QPushButton { padding: 6px 14px; font-weight: bold; }"
-            "QPushButton:disabled { color: #888888; }"
+    def _refresh_mode_actions(self):
+        mode = self._current_mode_key()
+        is_crop = mode == CROP_MODE_LABEL
+        is_case = mode == CASE_BRIEF_MODE_LABEL
+        is_motion = mode == MOTION_MODE_LABEL
+        is_lane = mode == "道路线"
+        can_add = mode in ("车辆", "道路线", "标记物")
+        self.add_vehicle_btn.setVisible(can_add)
+        self.add_vehicle_btn.setEnabled(can_add)
+        self.reset_crop_btn.setVisible(is_crop)
+        self.lane_width_btn.setVisible(is_lane)
+        self.finish_path_btn.setVisible(is_motion)
+        self.finish_path_btn.setEnabled(
+            is_motion and bool(getattr(self.viewer, "_path_edit_active", False))
         )
-
-    def _set_add_vehicle_button_text(self, active):
-        idle, active_text = self._current_add_label()
-        self.add_vehicle_btn.setText(active_text if active else idle)
-
-    def _start_add_vehicle_button_flow(self):
-        self._add_btn_flow_step = 0
-        self._update_add_vehicle_button_flow()
-        self._add_btn_flow_timer.start()
-
-    def _stop_add_vehicle_button_flow(self):
-        self._add_btn_flow_timer.stop()
-        self._set_add_vehicle_button_idle_style()
-        self._set_add_vehicle_button_text(False)
-
-    def _update_add_vehicle_button_flow(self):
-        colors = [
-            ("#fff59d", "#ff6d00"),
-            ("#ffe082", "#ff1744"),
-            ("#ffcc80", "#7c4dff"),
-            ("#fff176", "#00b0ff"),
-            ("#ffe57f", "#00c853"),
-            ("#fff59d", "#ff6d00"),
-        ]
-        c1, c2 = colors[self._add_btn_flow_step % len(colors)]
-        self._add_btn_flow_step += 1
-        self.add_vehicle_btn.setStyleSheet(
-            "QPushButton {"
-            "padding: 6px 14px;"
-            "font-weight: bold;"
-            "color: #111111;"
-            "border: 3px solid %s;"
-            "border-radius: 8px;"
-            "background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 %s, stop:0.45 #ffffff, stop:1 %s);"
-            "}"
-            "QPushButton:pressed { background-color: #ffd54f; }" % (c2, c1, c2)
-        )
+        if is_case:
+            self.show_all_checkbox.setEnabled(False)
+        else:
+            self.show_all_checkbox.setEnabled(True)
+        self._refresh_add_button_text()
 
     def on_vehicle_selection_changed(self, veh):
         self._selected_veh = veh
 
     def on_vehicle_selection_count_changed(self, count):
-        if not hasattr(self, "hint_label"):
-            # load_image_and_data() during init_ui() may clear the scene before
-            # hint_label exists yet; nothing to update in that case.
-            return
-        if count > 0:
-            self.hint_label.setText(
-                "方向标识: 已选中车辆(可 Ctrl 多选)，按 ← 逆时针旋转方向标识一格，"
-                "按 → 顺时针旋转一格，不改变识别框的角度和大小。"
-            )
-        else:
-            self.hint_label.setText(self._base_hint_text)
+        return
 
     def on_show_all_toggled(self, checked):
         self.viewer.set_show_all_objects(checked)
 
+    def on_reset_crop(self):
+        self.viewer.reset_canvas_crop()
+        self._set_status("已重置为原图短边居中的正方形裁剪，可再拉成任意矩形。", kind="success")
+
+    def on_lane_width(self):
+        self.viewer.open_lane_width_dialog()
+        self.viewer._emit_hint_context()
+
+    def on_finish_path(self):
+        self.viewer.finish_active_path_edit()
+
+    def on_path_edit_state_changed(self, active):
+        mode = self._current_mode_key()
+        self.finish_path_btn.setEnabled(mode == MOTION_MODE_LABEL and bool(active))
+
+    def on_path_edit_finished(self, duration, too_long):
+        if too_long:
+            self._set_status(
+                f"路径已结束，已连接到车辆中心。预估约 {duration:.1f} 秒（超过 30 秒，显示为红色）。",
+                kind="success",
+            )
+        else:
+            self._set_status(
+                f"路径已结束，已连接到车辆中心。预估约 {duration:.1f} 秒。",
+                kind="success",
+            )
+
+    def _persist_fields(self):
+        return {
+            "accident_brief": self.accident_brief_text(),
+            "lane_width_settings": self.viewer.get_lane_width_settings_for_cache(),
+            "canvas_crop": self.viewer.get_canvas_crop(),
+        }
+
     def on_cache_only(self):
         final_vehicles, final_lanes, final_markers = self.viewer.get_confirmed_data()
-        accident_brief = self.accident_brief_text()
-        lane_width_settings = self.viewer.get_lane_width_settings_for_cache()
+        extra = self._persist_fields()
         persisted_ai_analysis = self.cached_annotation.get("ai_analysis")
         persisted_liability_context = self.cached_annotation.get("liability_context")
         persisted_html_path = self.cached_annotation.get("generated_html_path", "")
@@ -495,11 +685,13 @@ class ResultWindow(QDialog):
                 ai_analysis=persisted_ai_analysis,
                 liability_context=persisted_liability_context,
                 generated_html_path=persisted_html_path,
-                accident_brief=accident_brief,
-                lane_width_settings=lane_width_settings,
+                accident_brief=extra["accident_brief"],
+                lane_width_settings=extra["lane_width_settings"],
+                canvas_crop=extra["canvas_crop"],
             )
         except Exception as e:
-            QMessageBox.critical(self, "错误", f"缓存失败: {str(e)}")
+            QMessageBox.critical(self, "错误", f"保存失败: {str(e)}")
+            self._set_status(f"保存失败：{e}", kind="error")
             return
         self.cached_annotation = {
             "vehicles": final_vehicles,
@@ -509,23 +701,25 @@ class ResultWindow(QDialog):
                 final_vehicles,
                 final_lanes,
                 final_markers,
-                accident_brief,
-                lane_width_settings,
+                extra["accident_brief"],
+                extra["lane_width_settings"],
             ),
             "ai_analysis": persisted_ai_analysis,
             "liability_context": persisted_liability_context,
             "generated_html_path": persisted_html_path,
-            "accident_brief": accident_brief,
-            "lane_width_settings": lane_width_settings,
+            "accident_brief": extra["accident_brief"],
+            "lane_width_settings": extra["lane_width_settings"],
+            "canvas_crop": extra["canvas_crop"],
         }
-        self.hint_label.setText(
-            "已缓存当前识别结果（含单独车辆尺寸、本图车道宽、事故案情与运动路径），尚未生成建模。"
-            "可继续修改后再次点击「仅缓存」或「识别确认」。"
+        stamp = datetime.now().strftime("%H:%M:%S")
+        self.cache_only_btn.setStyleSheet(CACHE_BTN_FLASH_QSS)
+        self._set_status(
+            f"已保存编辑 {stamp}。含裁剪范围、车辆尺寸、本图车道宽、案情与运动路径，尚未生成建模。",
+            kind="success",
         )
 
     def on_edit_mode_changed(self, text):
         self.add_vehicle_btn.setChecked(False)
-        self._stop_add_vehicle_button_flow()
         self.viewer.set_add_vehicle_mode(False)
         self.viewer.set_lane_draw_enabled(False)
         self.viewer.set_marker_add_enabled(False)
@@ -533,117 +727,95 @@ class ResultWindow(QDialog):
         mode_key = _edit_mode_key(text)
         is_case_mode = mode_key == CASE_BRIEF_MODE_LABEL
         is_motion_mode = mode_key == MOTION_MODE_LABEL
-        self.add_vehicle_btn.setEnabled(not is_case_mode and not is_motion_mode)
-        self._update_mode_combo_style()
+        is_crop_mode = mode_key == CROP_MODE_LABEL
+        self._active_mode_key = mode_key
+        btn = self._mode_buttons.get(mode_key)
+        if btn is not None and not btn.isChecked():
+            btn.setChecked(True)
+        self._refresh_mode_item_styles()
 
         if is_case_mode:
+            self.viewer.set_canvas_crop_mode(False)
             self.viewer.set_motion_mode(False)
             self.viewer.set_draw_mode(False)
             self.viewer.set_marker_mode(False)
             self._selected_veh = None
             self._show_accident_panel()
-            self._set_case_hint()
-            # 事故案情页需要展示全部图层才方便用户用车辆ID描述案情,
-            # 这里只做视觉勾选+禁用,不改变 show_all_checkbox 的真实勾选状态,
-            # 离开该页时会恢复,不影响用户在其他页面原本的显示设置。
             self.show_all_checkbox.blockSignals(True)
             self.show_all_checkbox.setChecked(True)
             self.show_all_checkbox.blockSignals(False)
-            self.show_all_checkbox.setEnabled(False)
         else:
-            self.show_all_checkbox.setEnabled(True)
             self.show_all_checkbox.blockSignals(True)
             self.show_all_checkbox.setChecked(self.viewer.show_all_objects)
             self.show_all_checkbox.blockSignals(False)
             self._hide_accident_panel()
-            if mode_key == "道路线":
+            if is_crop_mode:
+                self.viewer.set_motion_mode(False)
+                self.viewer.set_marker_mode(False)
+                self.viewer.set_draw_mode(False)
+                self.viewer.set_canvas_crop_mode(True)
+                self._selected_veh = None
+            elif mode_key == "道路线":
+                self.viewer.set_canvas_crop_mode(False)
                 self.viewer.set_motion_mode(False)
                 self.viewer.set_marker_mode(False)
                 self.viewer.set_draw_mode(True)
                 self._selected_veh = None
-                self._set_draw_hint()
             elif mode_key == "标记物":
+                self.viewer.set_canvas_crop_mode(False)
                 self.viewer.set_motion_mode(False)
                 self.viewer.set_draw_mode(False)
                 self.viewer.set_marker_mode(True)
                 self._selected_veh = None
-                self._set_marker_hint()
             elif is_motion_mode:
+                self.viewer.set_canvas_crop_mode(False)
                 self.viewer.set_draw_mode(False)
                 self.viewer.set_marker_mode(False)
                 self.viewer.set_motion_mode(True)
                 self._selected_veh = None
-                self._set_motion_hint()
             else:
+                self.viewer.set_canvas_crop_mode(False)
                 self.viewer.set_motion_mode(False)
                 self.viewer.set_draw_mode(False)
                 self.viewer.set_marker_mode(False)
-                self._set_default_hint()
-        # set_case_mode 必须放在 set_draw_mode/set_marker_mode 之后调用,
-        # 否则事故案情页会被后续的 mode setter 重新打开车辆/车道/标记物的可选中状态。
         self.viewer.set_case_mode(is_case_mode)
-        self._refresh_add_button_text()
+        self._set_goal_hint(_GOAL_HINTS.get(mode_key, _GOAL_HINTS["车辆"]))
+        self._refresh_mode_actions()
+        self.viewer._emit_hint_context()
 
-    def _set_motion_hint(self):
-        self._set_hint(
-            "运动: 仅可选中车辆。右键车辆可「设置路径」或「设置速度」。"
-            "路径绘制时左键加点、右键空白结束；Delete 删除当前呼吸点；"
-            "滚轮切换呼吸点前进(G)/倒退(F)。"
-            "本页强制显示车辆框；车道/标记仍跟随「显示全部图层」。"
-        )
+    def _place_accident_panel(self):
+        vr = self.viewer.geometry()
+        x = vr.right() - self.accident_panel.width() - 16
+        y = vr.top() + 16
+        self.accident_panel.move(max(vr.left() + 8, x), y)
 
     def _show_accident_panel(self):
-        if not self._accident_panel_positioned:
-            self.accident_panel.move(self.width() - self.accident_panel.width() - 30, 90)
-            self._accident_panel_positioned = True
+        self._place_accident_panel()
+        self._accident_panel_positioned = True
         self.accident_panel.show()
         self.accident_panel.raise_()
 
     def _hide_accident_panel(self):
         self.accident_panel.hide()
 
-    def _set_case_hint(self):
-        self._set_hint(
-            "事故案情: 在浮动窗口中输入简要事故案情，建议用车辆ID指代车辆，"
-            "该内容会作为提示词发送给 AI 辅助责任分析。可拖动浮窗标题栏以免遮盖识别图像。"
-        )
-
     def on_add_toggled(self, checked):
-        mode = _edit_mode_key(self.mode_combo.currentText())
-        if mode in (CASE_BRIEF_MODE_LABEL, MOTION_MODE_LABEL):
+        mode = self._current_mode_key()
+        if mode not in ("车辆", "道路线", "标记物"):
             self.add_vehicle_btn.setChecked(False)
+            self._refresh_add_button_text()
             return
         if mode == "道路线":
             self.viewer.set_lane_draw_enabled(checked)
-            if checked:
-                self._start_add_vehicle_button_flow()
-                self._set_add_vehicle_button_text(True)
-                self._set_add_lane_hint()
-            else:
-                self._stop_add_vehicle_button_flow()
-                self._set_draw_hint()
-            return
-        if mode == "标记物":
+        elif mode == "标记物":
             self.viewer.set_marker_add_enabled(checked)
-            if checked:
-                self._start_add_vehicle_button_flow()
-                self._set_add_vehicle_button_text(True)
-                self._set_add_marker_hint()
-            else:
-                self._stop_add_vehicle_button_flow()
-                self._set_marker_hint()
-            return
-        self.viewer.set_draw_mode(False)
-        self.viewer.set_marker_mode(False)
-        self.viewer.set_add_vehicle_mode(checked)
-        if checked:
-            self._selected_veh = None
-            self._set_add_vehicle_button_text(True)
-            self._start_add_vehicle_button_flow()
-            self._set_add_vehicle_hint()
         else:
-            self._stop_add_vehicle_button_flow()
-            self._set_default_hint()
+            self.viewer.set_draw_mode(False)
+            self.viewer.set_marker_mode(False)
+            self.viewer.set_add_vehicle_mode(checked)
+            if checked:
+                self._selected_veh = None
+        self._refresh_add_button_text()
+        self.viewer._emit_hint_context()
 
     def on_generate(self):
         final_vehicles, final_lanes, final_markers = self.viewer.get_confirmed_data()
@@ -651,12 +823,13 @@ class ResultWindow(QDialog):
             self._refresh_generate_enabled()
             return
 
+        extra = self._persist_fields()
         current_fingerprint = annotation_fingerprint(
             final_vehicles,
             final_lanes,
             final_markers,
-            self.accident_brief_text(),
-            self.viewer.get_lane_width_settings_for_cache(),
+            extra["accident_brief"],
+            extra["lane_width_settings"],
         )
         force_regenerate_ai = bool(
             self.ai_settings.get("regenerateLiabilityEachTime", True)
@@ -675,10 +848,6 @@ class ResultWindow(QDialog):
                     "liability_context"
                 )
 
-        # The per-window checkbox is the final switch for this generation.
-        # Force only the enable flag on a temporary copy so a checked local
-        # switch can run AI even when the persistent enable setting is off;
-        # API key, URL and model validation still use the normal rules.
         effective_ai_settings = dict(self.ai_settings)
         effective_ai_settings["enableLiabilityAnalysis"] = True
         run_ai_this_time = (
@@ -724,9 +893,10 @@ class ResultWindow(QDialog):
                 final_vehicles,
                 final_lanes,
                 self.ai_settings,
-                accident_brief=self.accident_brief_text(),
-                lane_width_settings=self.viewer.get_lane_width_settings_for_cache(),
+                accident_brief=extra["accident_brief"],
+                lane_width_settings=extra["lane_width_settings"],
                 markers=final_markers,
+                canvas_crop=extra["canvas_crop"],
             )
             self.ai_thread.finished.connect(
                 lambda ai_analysis, liability_context: self._on_ai_finished(
@@ -891,7 +1061,7 @@ class ResultWindow(QDialog):
         persist_liability_context=None,
     ):
         save_url = start_measurement_save_server()
-        lane_width_settings = self.viewer.get_lane_width_settings_for_cache()
+        extra = self._persist_fields()
         html_path = generate_html(
             self.image_path,
             final_vehicles,
@@ -900,9 +1070,9 @@ class ResultWindow(QDialog):
             save_measurements_url=save_url,
             ai_analysis=html_ai_analysis,
             liability_context=html_liability_context,
-            lane_width_settings=lane_width_settings,
+            lane_width_settings=extra["lane_width_settings"],
+            canvas_crop=extra["canvas_crop"],
         )
-        accident_brief = self.accident_brief_text()
         save_annotation(
             self.image_path,
             final_vehicles,
@@ -911,8 +1081,9 @@ class ResultWindow(QDialog):
             ai_analysis=persist_ai_analysis,
             liability_context=persist_liability_context,
             generated_html_path=html_path,
-            accident_brief=accident_brief,
-            lane_width_settings=lane_width_settings,
+            accident_brief=extra["accident_brief"],
+            lane_width_settings=extra["lane_width_settings"],
+            canvas_crop=extra["canvas_crop"],
         )
         self.cached_annotation = {
             "vehicles": final_vehicles,
@@ -922,17 +1093,19 @@ class ResultWindow(QDialog):
                 final_vehicles,
                 final_lanes,
                 final_markers,
-                accident_brief,
-                lane_width_settings,
+                extra["accident_brief"],
+                extra["lane_width_settings"],
             ),
             "ai_analysis": persist_ai_analysis,
             "liability_context": persist_liability_context,
             "generated_html_path": html_path,
-            "accident_brief": accident_brief,
-            "lane_width_settings": lane_width_settings,
+            "accident_brief": extra["accident_brief"],
+            "lane_width_settings": extra["lane_width_settings"],
+            "canvas_crop": extra["canvas_crop"],
         }
         QDesktopServices.openUrl(QUrl.fromLocalFile(html_path))
         base = os.path.basename(html_path)
-        self.hint_label.setText(
-            f"已生成并打开: {base}。可继续修改后再次点击「识别确认」。"
+        self._set_status(
+            f"已生成并打开: {base}。可继续修改后再次点击「识别确认」。",
+            kind="success",
         )

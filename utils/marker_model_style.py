@@ -106,6 +106,17 @@ def get_marker_model_script() -> str:
             });
         }
 
+        function addMarkerBox(group, width, height, depth, pos, mat) {
+            const geo = new THREE.BoxGeometry(width, height, depth);
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(pos.x, pos.y, pos.z);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            addMarkerEdgeOutline(mesh, 12);
+            group.add(mesh);
+            return mesh;
+        }
+
         function buildGuideSignMarker(group, spec) {
             const redMat = markerMaterial(0xd71920, { roughness: 0.42 });
             const yellowMat = markerMaterial(0xffd21f, { roughness: 0.38 });
@@ -119,6 +130,20 @@ def get_marker_model_script() -> str:
             outer.rotation.x = Math.PI / 2;
             const inner = addMarkerCylinder(group, diskRadius * 0.72, diskRadius * 0.72, spec.length + 0.012, { x: 0, y: diskY, z: 0.006 }, yellowMat, 48);
             inner.rotation.x = Math.PI / 2;
+        }
+
+        function buildKilometerSignMarker(group, spec) {
+            const redMat = markerMaterial(0xd71920, { roughness: 0.42 });
+            const greenMat = markerMaterial(0x145c36, { roughness: 0.4 });
+            const plateWidth = spec.width;
+            const plateHeight = Math.max(spec.width * 0.55, spec.height * 0.28);
+            const plateDepth = spec.length;
+            const poleHeight = Math.max(spec.height - plateHeight, spec.height * 0.45);
+            const poleRadius = Math.max(0.025, spec.length * 0.18);
+            addMarkerCylinder(group, poleRadius, poleRadius, poleHeight, { x: 0, y: poleHeight / 2, z: 0 }, redMat, 20);
+            addMarkerCylinder(group, spec.width * 0.3, spec.width * 0.36, 0.08, { x: 0, y: 0.04, z: 0 }, redMat, 24);
+            const plateY = Math.min(spec.height - plateHeight / 2, poleHeight + plateHeight / 2);
+            addMarkerBox(group, plateWidth, plateHeight, plateDepth, { x: 0, y: plateY, z: 0 }, greenMat);
         }
 
         // Scattered debris: a flat ground disc plus red rings that emit from the
@@ -305,6 +330,7 @@ def get_marker_model_script() -> str:
             const spec = MARKER_SPECS[config.type] || MARKER_SPECS['安全椎桶'] || { kind: 'trafficCone', width: 0.4, length: 0.4, height: 0.8 };
             if (spec.kind === 'adult') buildAdultMarker(group, spec);
             else if (spec.kind === 'guideSign') buildGuideSignMarker(group, spec);
+            else if (spec.kind === 'kilometerSign') buildKilometerSignMarker(group, spec);
             else if (spec.kind === 'scatteredDebris') buildScatteredDebrisMarker(group, spec);
             else if (spec.kind === 'impactSphere') buildImpactSphereMarker(group, spec);
             else buildTrafficConeMarker(group, spec);

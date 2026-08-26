@@ -183,6 +183,7 @@ def generate_html(
     ai_analysis=None,
     liability_context=None,
     lane_width_settings=None,
+    canvas_crop=None,
 ):
     """
     根据图像和检测数据生成最终的 HTML 场景文件
@@ -220,6 +221,7 @@ def generate_html(
         markers=markers,
         lane_width=lane_width,
         emergency_lane_width=emergency_lane_width,
+        canvas_crop=canvas_crop,
     )
     settings_json = json.dumps(data, ensure_ascii=False)
 

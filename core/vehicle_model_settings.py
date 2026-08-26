@@ -100,6 +100,12 @@ DEFAULT_MARKER_SPECS = {
         "length": 0.2,
         "height": 2.2,
     },
+    "公里牌": {
+        "kind": "kilometerSign",
+        "width": 0.8,
+        "length": 0.2,
+        "height": 2.2,
+    },
     "散落物": {
         "kind": "scatteredDebris",
         "radius": 1.5,

@@ -99,10 +99,11 @@ class MotionPathEditorMixin:
         """Called from _apply_type_visibility when motion_mode is on."""
         show_all = self.show_all_objects
         for item, info in self.items_data.items():
+            in_ws = self._item_in_workspace(item, info)
             if info["type"] == "vehicle":
-                item.setVisible(True)
+                item.setVisible(in_ws)
             else:
-                item.setVisible(show_all)
+                item.setVisible(show_all and in_ws)
         for vehicle_item, arrow in self._front_arrow_map.items():
             arrow.setVisible(vehicle_item.isVisible())
         for vehicle_item, label in self._vehicle_label_map.items():
@@ -167,6 +168,10 @@ class MotionPathEditorMixin:
         else:
             self._path_breath_timer.stop()
             self._path_dash_timer.stop()
+        if hasattr(self, "path_edit_state_changed"):
+            self.path_edit_state_changed.emit(True)
+        if hasattr(self, "_emit_hint_context"):
+            self._emit_hint_context()
 
     def _cancel_path_edit(self, save=False):
         if not self._path_edit_active:
@@ -195,6 +200,10 @@ class MotionPathEditorMixin:
         if veh is not None:
             self._refresh_finished_path_overlay_for_vehicle(veh)
             self._emit_objects_changed()
+        if hasattr(self, "path_edit_state_changed"):
+            self.path_edit_state_changed.emit(False)
+        if hasattr(self, "_emit_hint_context"):
+            self._emit_hint_context()
 
     def _finish_path_edit(self):
         if not self._path_edit_active:
@@ -224,6 +233,8 @@ class MotionPathEditorMixin:
                 "路径将显示为红色。可提高车速或缩短路径。",
             )
         self._cancel_path_edit(save=True)
+        if hasattr(self, "path_edit_finished"):
+            self.path_edit_finished.emit(float(duration), bool(duration > MOTION_WARN_DURATION_S))
 
     def _vehicle_center_point(self, veh):
         return {"x": float(veh["x_center"]), "y": float(veh["y_center"])}
@@ -420,6 +431,8 @@ class MotionPathEditorMixin:
                 f"每台车最多可添加 {MAX_MOTION_PATH_POINTS} 个路径点。",
             )
             return True
+        if hasattr(self, "_clamp_point_to_workspace"):
+            scene_x, scene_y = self._clamp_point_to_workspace(scene_x, scene_y)
         new_pt = {
             "x": float(scene_x),
             "y": float(scene_y),
@@ -432,7 +445,12 @@ class MotionPathEditorMixin:
         self._rebuild_path_edit_items()
         self._path_breath_timer.start()
         self._path_dash_timer.start()
+        if hasattr(self, "_emit_hint_context"):
+            self._emit_hint_context()
         return True
+
+    def finish_active_path_edit(self):
+        self._finish_path_edit()
 
     def _toggle_breathing_path_drive(self):
         """Toggle G/F on the breathing path point (wheel while drawing)."""

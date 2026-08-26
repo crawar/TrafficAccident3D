@@ -9,6 +9,7 @@ from utils.ai_experts import experts_for_runtime, load_ai_experts
 from utils.ai_settings import ai_request_config, sanitize_ai_settings
 from utils.data_converter import convert_to_3d_data
 from utils.knowledge_retrieve import build_knowledge_attachment
+from utils.knowledge_store import playbook_is_populated
 
 
 DEFAULT_DEEPSEEK_CHAT_URL = "https://api.deepseek.com/chat/completions"
@@ -292,6 +293,7 @@ def build_liability_context(
     accident_brief=None,
     lane_width_settings=None,
     markers=None,
+    canvas_crop=None,
 ):
     img = cv2.imread(image_path)
     if img is None:
@@ -323,6 +325,7 @@ def build_liability_context(
         markers=markers,
         lane_width=lane_width,
         emergency_lane_width=emergency_lane_width,
+        canvas_crop=canvas_crop,
     )
     collisions = _collision_records(accident_settings["vehicles"])
     vehicle_summaries, traffic_reference = _vehicle_summaries(
@@ -403,7 +406,7 @@ def _request_payload(liability_context, ai_settings, experts=None):
             "责任说明必须基于 vehicleId，不得使用颜色或模糊位置代称。",
             "如果某车辆与事故无关，请明确写无责，并在 reason 中说明未形成碰撞或未影响事故。",
             "需要结合车辆位置、方向、尺寸、车道类型、标记物、运动路径（若有）、碰撞关系进行分析。",
-            "markerSummaries / accidentSettings.markers 中的散落物、碰撞点、锥桶、人员、导向牌等标记物必须纳入分析参考。",
+            "markerSummaries / accidentSettings.markers 中的散落物、碰撞点、锥桶、人员、导向牌、公里牌等标记物必须纳入分析参考。",
             "motionPathSummaries 若存在，表示用户标注的车辆运动路径与相对车速，须作为事故前运动过程的重要参考。",
             "严禁臆造照片无法直接确认的信息，包括但不限于具体时间、日期、天气、信号灯状态、车速、驾驶人口供、东南西北或由南往北等绝对方向。",
             "可描述沿道路轴线同向、反向、斜向，不能写成东南西北。",
@@ -474,17 +477,37 @@ def _request_payload(liability_context, ai_settings, experts=None):
     }
 
 
-def _payload_used_knowledge(payload):
+def _payload_citation_sources(payload):
+    result = {"playbook": False, "cases": False}
     try:
         messages = payload.get("messages") if isinstance(payload, dict) else None
         if not isinstance(messages, list) or len(messages) < 2:
-            return False
+            return result
         content = messages[1].get("content") if isinstance(messages[1], dict) else ""
         data = json.loads(content)
         knowledge = data.get("historicalLiabilityKnowledge")
-        return bool(knowledge)
+        if not knowledge:
+            return result
+        if not isinstance(knowledge, dict):
+            result["playbook"] = True
+            result["cases"] = True
+            return result
+        playbook = knowledge.get("playbook")
+        similar = knowledge.get("similarHistoricalCases")
+        result["playbook"] = (
+            playbook_is_populated(playbook)
+            if isinstance(playbook, dict)
+            else bool(playbook)
+        )
+        result["cases"] = isinstance(similar, list) and len(similar) > 0
+        return result
     except (TypeError, ValueError, json.JSONDecodeError, AttributeError):
-        return False
+        return result
+
+
+def _payload_used_knowledge(payload):
+    sources = _payload_citation_sources(payload)
+    return bool(sources.get("playbook") or sources.get("cases"))
 
 
 def _request_options(ai_settings):
@@ -814,7 +837,10 @@ def request_liability_analysis(ai_settings, liability_context):
     parsed_content = json.loads(_extract_json_content(content))
     parsed_content = _repair_vehicle_responsibilities(parsed_content, liability_context)
     parsed_content = _align_expert_speeches(parsed_content, experts)
-    knowledge_referenced = _payload_used_knowledge(payload)
+    citation_sources = _payload_citation_sources(payload)
+    knowledge_referenced = bool(
+        citation_sources.get("playbook") or citation_sources.get("cases")
+    )
     return {
         "provider": "DeepSeek",
         "model": payload["model"],
@@ -824,4 +850,5 @@ def request_liability_analysis(ai_settings, liability_context):
         "requestContext": liability_context,
         "experts": experts,
         "knowledgeReferenced": knowledge_referenced,
+        "citationSources": citation_sources,
     }

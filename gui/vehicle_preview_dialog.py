@@ -44,6 +44,14 @@ FIELD_LABELS = {
     "emissionInterval": "发射间隔(秒)",
 }
 
+MARKER_FIELD_LABELS = {
+    "width": "宽",
+    "length": "长",
+    "height": "高",
+    "radius": "半径",
+    "emissionInterval": "发射间隔(秒)",
+}
+
 
 def preview_html_path():
     return app_path("templates", "vehicle_model_preview.html")
@@ -290,7 +298,7 @@ class VehiclePreviewDialog(QDialog):
             return [k for k in ("radius", "emissionInterval") if k in spec]
         if spec.get("kind") == "impactSphere":
             return [k for k in ("radius", "height", "emissionInterval") if k in spec]
-        if spec.get("kind") in {"trafficCone", "adult", "guideSign"}:
+        if spec.get("kind") in {"trafficCone", "adult", "guideSign", "kilometerSign"}:
             return [k for k in ("length", "width", "height") if k in spec]
         # All vehicle kinds: unified LWH + wheel radius + wheel Z positions.
         if "wheelRadius" in spec or "wheels" in spec:
@@ -341,10 +349,11 @@ class VehiclePreviewDialog(QDialog):
         self._show_mapping_check.setChecked(self._show_mapping)
 
         keys = self._visible_keys(default_group[item_type])
+        labels = MARKER_FIELD_LABELS if item_kind == "marker" else FIELD_LABELS
         for idx, key in enumerate(keys):
             row = idx // 2
             col = (idx % 2) * 2
-            label = QLabel(FIELD_LABELS.get(key, key))
+            label = QLabel(labels.get(key, FIELD_LABELS.get(key, key)))
             if key == "wheels":
                 edit = QLineEdit()
                 edit.setText(", ".join(self._format_number(v) for v in spec.get(key, [])))

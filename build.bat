@@ -169,6 +169,8 @@ python -m PyInstaller ^
     --hidden-import PySide6.QtWebEngineCore ^
     --hidden-import PySide6.QtWebEngineWidgets ^
     --hidden-import matplotlib.backends.backend_qtagg ^
+    --add-data "%PROJECT_DIR%gui\check_mark.png;gui" ^
+    --add-data "%PROJECT_DIR%gui\combo_down.png;gui" ^
     "%PROJECT_DIR%main.py"
 if errorlevel 1 (
     echo [ERROR] PyInstaller build failed.
@@ -219,6 +221,7 @@ if not exist "%APP_OUT%\history\json" mkdir "%APP_OUT%\history\json"
 echo [OK] history folders created.
 
 REM Copy distilled playbook and case packs. Skip Excel sources and migration leftovers.
+REM ExampleTable.xlsx is the only Excel that ships, as a read-only format sample.
 if not exist "%APP_OUT%\knowledge" mkdir "%APP_OUT%\knowledge"
 if exist "%PROJECT_DIR%knowledge" (
     robocopy "%PROJECT_DIR%knowledge" "%APP_OUT%\knowledge" /E /XF *.xlsx *.xls *.migrated *.tmp >nul
@@ -227,7 +230,17 @@ if exist "%PROJECT_DIR%knowledge" (
         goto :fail
     )
 )
-echo [OK] knowledge copied ^(playbook and case packs^).
+if not exist "%PROJECT_DIR%knowledge\ExampleTable.xlsx" (
+    echo [ERROR] Missing knowledge\ExampleTable.xlsx
+    goto :fail
+)
+copy /Y "%PROJECT_DIR%knowledge\ExampleTable.xlsx" "%APP_OUT%\knowledge\ExampleTable.xlsx" >nul
+if errorlevel 1 (
+    echo [ERROR] Failed to copy knowledge\ExampleTable.xlsx
+    goto :fail
+)
+attrib +R "%APP_OUT%\knowledge\ExampleTable.xlsx" >nul
+echo [OK] knowledge copied ^(playbook, case packs, ExampleTable.xlsx^).
 
 if exist "%PROJECT_DIR%pic" (
     call :copy_dir "%PROJECT_DIR%pic" "%APP_OUT%\pic" "pic"
@@ -280,6 +293,10 @@ if exist "%PROJECT_DIR%knowledge\index.json" if not exist "%APP_OUT%\knowledge\i
     echo [ERROR] Missing knowledge\index.json
     set "VERIFY_FAIL=1"
 )
+if not exist "%APP_OUT%\knowledge\ExampleTable.xlsx" (
+    echo [ERROR] Missing knowledge\ExampleTable.xlsx
+    set "VERIFY_FAIL=1"
+)
 if not exist "%APP_OUT%\downloads" (
     echo [ERROR] Missing downloads folder
     set "VERIFY_FAIL=1"
@@ -308,7 +325,7 @@ echo.
 echo Packaged resources:
 echo   - templates / static / glbmodels / downloads
 echo   - ExpertPic / config ^(API key cleared^)
-echo   - history ^(empty^) / knowledge ^(playbook and case packs^) / Example images / pic^(if present^)
+echo   - history ^(empty^) / knowledge ^(playbook, case packs, ExampleTable.xlsx^) / Example images / pic^(if present^)
 echo.
 echo Double-click this file to run the packed app:
 echo %APP_OUT%\%APP_NAME%.exe

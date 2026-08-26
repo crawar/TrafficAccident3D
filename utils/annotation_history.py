@@ -76,6 +76,34 @@ def _prune_history_json_files(keep_count=MAX_HISTORY_JSON_FILES):
             continue
 
 
+def sanitize_canvas_crop(raw):
+    if not isinstance(raw, dict):
+        return None
+    try:
+        x = float(raw.get("x"))
+        y = float(raw.get("y"))
+    except (TypeError, ValueError):
+        return None
+    if x != x or y != y:
+        return None
+    width = raw.get("width")
+    height = raw.get("height")
+    size = raw.get("size")
+    try:
+        if width is not None and height is not None:
+            crop_w = float(width)
+            crop_h = float(height)
+        elif size is not None:
+            crop_w = crop_h = float(size)
+        else:
+            return None
+    except (TypeError, ValueError):
+        return None
+    if not (crop_w > 0 and crop_h > 0):
+        return None
+    return {"x": x, "y": y, "width": crop_w, "height": crop_h}
+
+
 def _sanitize_lane_width_settings(raw):
     if not isinstance(raw, dict):
         return None
@@ -131,6 +159,7 @@ def load_annotation(image_path):
         "lane_width_settings": _sanitize_lane_width_settings(
             payload.get("lane_width_settings")
         ),
+        "canvas_crop": sanitize_canvas_crop(payload.get("canvas_crop")),
     }
 
 
@@ -144,6 +173,7 @@ def save_annotation(
     generated_html_path="",
     accident_brief="",
     lane_width_settings=None,
+    canvas_crop=None,
 ):
     os.makedirs(HISTORY_JSON_DIR, exist_ok=True)
     annotation_path = _annotation_path(image_path)
@@ -172,6 +202,7 @@ def save_annotation(
         "generated_html_path": os.path.abspath(generated_html_path) if generated_html_path else "",
         "accident_brief": safe_accident_brief,
         "lane_width_settings": safe_lane_widths,
+        "canvas_crop": sanitize_canvas_crop(canvas_crop),
     }
 
     with open(annotation_path, "w", encoding="utf-8") as f:

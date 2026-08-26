@@ -7,6 +7,7 @@ from PySide6.QtGui import QDesktopServices
 import os
 
 from core.yolo_detector import YoloDetector
+from gui.app_styles import HISTORY_BTN_STYLE, PRIMARY_BTN_STYLE, PRIMARY_CONTROL_H
 from gui.example_dialog import ExampleDialog
 from gui.result_window import ResultWindow
 from gui.knowledge_settings_dialog import KnowledgeSettingsDialog
@@ -24,63 +25,6 @@ from utils.recognition_settings import (
     models_available,
     selected_model_path,
 )
-
-PRIMARY_CONTROL_H = 50
-
-# Visual language: slate + teal (aviation / forensic dashboard), not purple.
-PRIMARY_BTN_STYLE = """
-QPushButton {
-    min-height: %dpx;
-    max-height: %dpx;
-    font-size: 15px;
-    font-weight: 700;
-    letter-spacing: 1px;
-    border-radius: 14px;
-    background-color: #0f766e;
-    color: #f0fdfa;
-    padding: 0 16px;
-    border: 1px solid #14b8a6;
-}
-QPushButton:hover:enabled {
-    background-color: #0d9488;
-    border: 1px solid #2dd4bf;
-}
-QPushButton:pressed:enabled {
-    background-color: #115e59;
-}
-QPushButton:disabled {
-    background-color: #334155;
-    color: #94a3b8;
-    border: 1px solid #475569;
-}
-""" % (PRIMARY_CONTROL_H, PRIMARY_CONTROL_H)
-
-HISTORY_BTN_STYLE = """
-QPushButton {
-    min-height: %dpx;
-    max-height: %dpx;
-    font-size: 15px;
-    font-weight: 600;
-    border-radius: 14px;
-    background-color: #1e293b;
-    color: #e2e8f0;
-    padding: 0 16px;
-    border: 1px solid #334155;
-}
-QPushButton:hover:enabled {
-    background-color: #243044;
-    border: 1px solid #14b8a6;
-    color: #f0fdfa;
-}
-QPushButton:pressed:enabled {
-    background-color: #0f172a;
-}
-QPushButton:disabled {
-    background-color: #1e293b;
-    color: #64748b;
-    border: 1px solid #334155;
-}
-""" % (PRIMARY_CONTROL_H, PRIMARY_CONTROL_H)
 
 
 class ProcessThread(QThread):

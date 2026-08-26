@@ -8,7 +8,7 @@ if exist "D:\Git\cmd\git.exe" set "PATH=D:\Git\cmd;%PATH%"
 echo ========================================================
 echo Publish TrafficAccident3D to GitHub (public)
 echo This script will NOT upload config\ai_settings.json
-echo Distilled knowledge playbook and case packs ARE uploaded.
+echo Distilled knowledge playbook IS uploaded. Case packs are NOT uploaded.
 echo ========================================================
 echo.
 
@@ -66,6 +66,15 @@ if not errorlevel 1 (
 echo [OK] API key file is ignored and not staged.
 echo.
 
+git diff --cached --name-only | findstr /I /C:"knowledge/packs/" /C:"knowledge/index.json" >nul
+if not errorlevel 1 (
+    echo [ERROR] Case pack files are staged. Aborting.
+    pause
+    exit /b 1
+)
+echo [OK] Case packs are not staged.
+echo.
+
 echo [4/5] Creating initial commit...
 git add -A
 git -c "user.name=%GH_USER%" -c "user.email=%GH_USER%@users.noreply.github.com" commit -m "Initial public release of TrafficAccident3D."
@@ -90,7 +99,7 @@ gh repo view --web --json url --jq .url
 echo.
 echo Local secret kept out of GitHub:
 echo   config\ai_settings.json
-echo Distilled knowledge playbook and case packs are included.
+echo Distilled knowledge playbook is included. Case packs were not uploaded.
 echo YOLO weights were not uploaded (GitHub 100MB limit).
 echo ========================================================
 pause

@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """Dedicated knowledge-base settings dialog (not part of system settings)."""
 
-from PySide6.QtCore import Qt, QThread, QTimer, Signal
+from PySide6.QtCore import Qt, QThread, QTimer, QUrl, Signal
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QDialog,
@@ -29,6 +30,7 @@ from utils.knowledge_store import (
     list_pack_summaries,
     playbook_is_populated,
     playbook_status_text,
+    prepare_example_table_readonly_copy,
     rename_pack,
     set_pack_enabled,
 )
@@ -142,6 +144,7 @@ class KnowledgeSettingsDialog(QDialog):
 
         intro = QLabel(
             "选择事故 Excel（A 列为发生经过，B 列为人工认定）后精炼。"
+            "可先点「查看精炼表格示例」对照格式；示例为只读，请另存为自己的表格后再填写并上传。"
             "口径手册全库只有一份，再次精炼会去重合并进手册。"
             "案件结果按列表保存，新结果不会覆盖旧结果；可勾选启用、重命名，删除某一份不会改手册。"
         )
@@ -194,6 +197,14 @@ class KnowledgeSettingsDialog(QDialog):
         self.empty_label = QLabel("暂无精炼结果。选择 Excel 后会在此追加一条。")
         self.empty_label.setStyleSheet("color: #64748b;")
         layout.addWidget(self.empty_label)
+
+        self.example_btn = QPushButton("查看精炼表格示例")
+        self.example_btn.setMinimumHeight(40)
+        self.example_btn.setCursor(Qt.PointingHandCursor)
+        self.example_btn.setAutoDefault(False)
+        self.example_btn.setDefault(False)
+        self.example_btn.clicked.connect(self._on_open_example_table)
+        layout.addWidget(self.example_btn)
 
         self.refine_btn = QPushButton("选择 Excel 并精炼")
         self.refine_btn.setMinimumHeight(40)
@@ -310,6 +321,7 @@ class KnowledgeSettingsDialog(QDialog):
             )
         self.playbook_label.setText(playbook_status_text())
         self._reload_table()
+        self.example_btn.setEnabled(not running)
         self.refine_btn.setEnabled(has_key and not running)
         self.delete_playbook_btn.setEnabled((not running) and playbook_is_populated())
         self.close_btn.setEnabled(not running)
@@ -330,6 +342,22 @@ class KnowledgeSettingsDialog(QDialog):
             self._refresh_state()
             return
         self.playbook_label.setText(playbook_status_text())
+
+    def _on_open_example_table(self):
+        try:
+            dest = prepare_example_table_readonly_copy()
+        except Exception as exc:
+            QMessageBox.warning(self, "无法打开示例", str(exc))
+            return
+        opened = QDesktopServices.openUrl(QUrl.fromLocalFile(dest))
+        if not opened:
+            QMessageBox.warning(
+                self,
+                "无法打开示例",
+                "已生成只读副本，但未能用系统默认程序打开。请确认本机已安装 Excel 或 WPS。",
+            )
+            return
+        self.progress_label.setText("已只读打开示例。请另存为自己的表格后再填写并上传。")
 
     def _on_refine(self):
         if not has_ai_api_key():

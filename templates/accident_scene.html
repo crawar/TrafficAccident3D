@@ -40,18 +40,6 @@
             top: 170px;
             background-color: #007bff;
         }
-        #measure-status {
-            position: absolute;
-            left: 20px;
-            bottom: 20px;
-            padding: 10px 15px;
-            background-color: rgba(0,0,0,0.8);
-            color: #ffffff;
-            border-radius: 5px;
-            z-index: 100;
-            font-size: 13px;
-            max-width: 240px;
-        }
         #orthogonal-lock-toggle,
         #magnetic-snap-toggle,
         #vehicle-id-toggle {
@@ -81,6 +69,13 @@
         #magnetic-snap-toggle {
             bottom: 108px;
         }
+        #orthogonal-lock-toggle.is-disabled,
+        #magnetic-snap-toggle.is-disabled,
+        #vehicle-id-toggle.is-disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
         #orthogonal-lock-checkbox,
         #magnetic-snap-checkbox,
         #vehicle-id-checkbox {
@@ -88,6 +83,11 @@
             width: 16px;
             height: 16px;
             margin: 0;
+        }
+        #orthogonal-lock-checkbox:disabled,
+        #magnetic-snap-checkbox:disabled,
+        #vehicle-id-checkbox:disabled {
+            cursor: not-allowed;
         }
         .liability-control {
             position: absolute;
@@ -195,96 +195,195 @@
         }
         #report-modal {
             position: fixed;
-            inset: 0;
-            background: rgba(0, 0, 0, 0.55);
+            left: 0;
+            right: 0;
+            bottom: 0;
             z-index: 320;
+            display: flex;
+            justify-content: stretch;
+            padding: 0 12px 12px;
+            box-sizing: border-box;
+            pointer-events: none;
+        }
+        #report-modal-card {
+            position: relative;
+            width: 100%;
+            height: 188px;
+            overflow: hidden;
+            border-radius: 16px;
+            background: rgba(16, 24, 36, 0.3);
+            color: #f4f7fb;
+            box-shadow: 0 10px 36px rgba(0, 0, 0, 0.38), 0 2px 10px rgba(0, 0, 0, 0.22);
+            backdrop-filter: blur(16px) saturate(1.18);
+            -webkit-backdrop-filter: blur(16px) saturate(1.18);
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            transform: translateY(120%);
+            transition: transform 0.38s cubic-bezier(0.22, 1, 0.36, 1);
+            pointer-events: auto;
+        }
+        #report-modal.is-visible #report-modal-card {
+            transform: translateY(0);
+        }
+        #report-close-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 28px;
+            height: 28px;
+            border: none;
+            border-radius: 6px;
+            background: rgba(248, 250, 252, 0.92);
+            color: #e11d2a;
+            cursor: pointer;
+            padding: 0;
+            font-size: 18px;
+            font-weight: 800;
+            line-height: 28px;
+            text-align: center;
+            z-index: 2;
+        }
+        #report-dialogue {
+            display: flex;
+            flex-direction: row;
+            align-items: stretch;
+            height: 100%;
+            padding: 12px 10px 12px 14px;
+            box-sizing: border-box;
+            gap: 14px;
+        }
+        #report-avatar-stack {
+            width: 104px;
+            flex: 0 0 104px;
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 6px;
+        }
+        #report-avatar,
+        #report-avatar-fallback {
+            width: 104px;
+            height: 104px;
+            display: block;
+            object-fit: cover;
+            border-radius: 10px;
+            background: #d1d5db;
+            flex: 0 0 104px;
+        }
+        #report-avatar:not([src]) {
+            display: none;
+        }
+        #report-avatar-fallback {
             display: none;
             align-items: center;
             justify-content: center;
-            padding: 20px;
+            font-size: 42px;
+            color: #6b7280;
+            font-weight: 700;
+        }
+        #report-expert-name {
+            font-weight: 700;
+            font-size: 12px;
+            line-height: 1.25;
+            color: #f8fafc;
+            text-align: center;
+            width: 104px;
+            flex: 0 0 auto;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+        }
+        #report-cite-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 4px;
+            width: 104px;
+            flex: 0 0 auto;
+        }
+        .report-cite-chip {
+            font-size: 10px;
+            text-align: center;
+            padding: 3px 0 4px;
+            line-height: 1.2;
+            user-select: none;
+            font-weight: 700;
+            border-radius: 6px;
             box-sizing: border-box;
         }
-        #report-modal.is-visible {
-            display: flex;
+        .report-cite-chip.is-on {
+            background: #16803a;
+            color: #ffe600;
         }
-        #report-modal-card {
-            width: min(860px, 100%);
-            max-height: 86vh;
-            overflow: auto;
-            border-radius: 16px;
-            background: #ffffff;
-            color: #222222;
-            box-shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
+        .report-cite-chip.is-off {
+            background: #6b7280;
+            color: #ffffff;
         }
-        #report-modal-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 16px 18px 10px;
-            border-bottom: 1px solid #ececec;
-            font-weight: 700;
-            font-size: 18px;
-        }
-        #report-close-btn {
-            border: none;
-            border-radius: 8px;
-            background: #efefef;
-            color: #222222;
-            cursor: pointer;
-            padding: 6px 10px;
-        }
-        #report-modal-body {
-            padding: 14px 18px 20px;
-        }
-        #report-modal-body pre {
-            margin: 0;
-            white-space: pre-wrap;
-            word-break: break-word;
-            font-size: 13px;
-            line-height: 1.55;
-            color: #222222;
-        }
-        #report-expert-list {
+        #report-content-col {
+            flex: 1 1 auto;
+            min-width: 0;
+            min-height: 0;
             display: flex;
             flex-direction: column;
-            gap: 14px;
         }
-        .report-expert-card {
-            display: grid;
-            grid-template-columns: 56px 1fr;
-            gap: 12px;
-            align-items: start;
-            padding: 12px;
-            border: 1px solid #ececec;
-            border-radius: 12px;
-            background: #fafafa;
+        #report-speech-wrap {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+            padding-right: 4px;
         }
-        .report-expert-avatar {
-            width: 56px;
-            height: 56px;
-            border-radius: 50%;
-            object-fit: cover;
-            background: #e8e8e8;
-            border: 1px solid #ddd;
+        #report-speech-wrap::-webkit-scrollbar {
+            width: 8px;
         }
-        .report-expert-name {
-            font-weight: 700;
-            font-size: 15px;
-            margin-bottom: 6px;
-            color: #1f1f1f;
+        #report-speech-wrap::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
         }
-        .report-expert-speech {
+        #report-speech-wrap::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.45);
+            border-radius: 8px;
+        }
+        #report-speech {
             margin: 0;
             white-space: pre-wrap;
             word-break: break-word;
             font-size: 13px;
             line-height: 1.6;
-            color: #333333;
+            color: #e8eef6;
+            font-family: inherit;
         }
-        .report-expert-empty {
-            color: #666666;
-            font-size: 13px;
-            line-height: 1.55;
+        #report-nav-col {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
+            flex: 0 0 36px;
+            padding-top: 24px;
+        }
+        .report-nav-tri {
+            width: 36px;
+            height: 36px;
+            border: none;
+            border-radius: 8px;
+            background: transparent;
+            color: #ffe566;
+            cursor: pointer;
+            padding: 0;
+            font-size: 22px;
+            line-height: 1;
+            animation: reportTriPulse 0.72s ease-in-out infinite;
+        }
+        .report-nav-tri:disabled {
+            animation: none;
+            color: #9aa3af;
+            cursor: not-allowed;
+            opacity: 0.55;
+        }
+        @keyframes reportTriPulse {
+            0%, 100% { opacity: 0.38; transform: scale(1); filter: drop-shadow(0 0 0 rgba(255, 229, 102, 0)); }
+            45% { opacity: 1; transform: scale(1.12); filter: drop-shadow(0 0 8px rgba(255, 229, 102, 0.95)); }
+            60% { opacity: 0.55; transform: scale(1.02); }
+            75% { opacity: 1; transform: scale(1.08); filter: drop-shadow(0 0 6px rgba(255, 229, 102, 0.8)); }
         }
         #pan-control-panel {
             position: absolute;
@@ -443,7 +542,6 @@
         <input id="motion-progress" type="range" min="0" max="1000" value="0" step="1">
         <button id="motion-speed-btn" class="motion-round-btn" type="button" title="播放倍速">1X</button>
     </div>
-    <div id="measure-status">点击“测量距离”后，在路面点击两点添加测量线；可勾选“锁定直角”强制相对车道线 0°/90° 方向，勾选“磁吸模式”自动吸附到轮胎/标记/道路线。</div>
     <label id="magnetic-snap-toggle" title="勾选后，测量起点/终点会自动吸附到最近的轮胎、标记物中心或道路线">
         <input type="checkbox" id="magnetic-snap-checkbox" checked>
         <span>磁吸模式</span>
@@ -453,18 +551,33 @@
         <span>锁定直角</span>
     </label>
     <label id="vehicle-id-toggle" title="勾选后在车辆头顶显示车辆编号">
-        <input type="checkbox" id="vehicle-id-checkbox">
+        <input type="checkbox" id="vehicle-id-checkbox" checked>
         <span>车辆编号</span>
     </label>
     <div id="liability-card"></div>
     <div id="report-modal" aria-hidden="true">
         <div id="report-modal-card">
-            <div id="report-modal-header">
-                <span>事故报告</span>
-                <button id="report-close-btn" type="button">关闭</button>
-            </div>
-            <div id="report-modal-body">
-                <div id="report-expert-list"></div>
+            <button id="report-close-btn" type="button" aria-label="关闭事故报告">×</button>
+            <div id="report-dialogue">
+                <div id="report-avatar-stack">
+                    <img id="report-avatar" alt="">
+                    <div id="report-avatar-fallback">?</div>
+                    <div id="report-expert-name"></div>
+                    <div id="report-cite-row">
+                        <span class="report-cite-chip is-off" id="report-cite-playbook">知识</span>
+                        <span class="report-cite-chip is-off" id="report-cite-memory">记忆</span>
+                        <span class="report-cite-chip is-off" id="report-cite-cases">案例</span>
+                    </div>
+                </div>
+                <div id="report-content-col">
+                    <div id="report-speech-wrap">
+                        <pre id="report-speech"></pre>
+                    </div>
+                </div>
+                <div id="report-nav-col">
+                    <button id="report-prev-btn" class="report-nav-tri" type="button" aria-label="上一位专家">▲</button>
+                    <button id="report-next-btn" class="report-nav-tri" type="button" aria-label="下一位专家">▼</button>
+                </div>
             </div>
         </div>
     </div>
@@ -693,6 +806,48 @@ const accidentSceneRuntime = {
         scene.add(ambientLight);
 
         const sceneBounds = (() => {
+            const scale = accidentSettings.scale || {};
+            const groundWidth = Number(scale.groundWidthMeters);
+            const groundDepth = Number(scale.groundDepthMeters);
+            const groundCenterX = Number(scale.groundCenterX);
+            const groundCenterZ = Number(scale.groundCenterZ);
+            if (Number.isFinite(groundWidth) && groundWidth > 0
+                && Number.isFinite(groundDepth) && groundDepth > 0) {
+                const cx = Number.isFinite(groundCenterX) ? groundCenterX : 0;
+                const cz = Number.isFinite(groundCenterZ) ? groundCenterZ : 0;
+                return {
+                    centerX: cx,
+                    centerZ: cz,
+                    width: groundWidth,
+                    depth: groundDepth,
+                    halfDepth: groundDepth / 2,
+                    shadowSpan: Math.max(groundWidth, groundDepth) / 2 + 10,
+                    fromCanvasCrop: true
+                };
+            }
+            const cropWidth = Number(scale.canvasWidthMeters);
+            const cropDepth = Number(scale.canvasHeightMeters);
+            const legacySize = Number(scale.canvasSizeMeters);
+            const cropBoundWidth = (Number.isFinite(cropWidth) && cropWidth > 0) ? cropWidth : legacySize;
+            const cropBoundDepth = (Number.isFinite(cropDepth) && cropDepth > 0) ? cropDepth : legacySize;
+            if (
+                Number.isFinite(cropBoundWidth) && cropBoundWidth > 0
+                && Number.isFinite(cropBoundDepth) && cropBoundDepth > 0
+            ) {
+                const padAlong = 10;
+                const padLateral = 5;
+                const width = cropBoundWidth + padLateral * 2;
+                const depth = cropBoundDepth + padAlong * 2;
+                return {
+                    centerX: 0,
+                    centerZ: 0,
+                    width,
+                    depth,
+                    halfDepth: depth / 2,
+                    shadowSpan: Math.max(width, depth) / 2 + 10,
+                    fromCanvasCrop: true
+                };
+            }
             const roads = Array.isArray(accidentSettings.roads) ? accidentSettings.roads : [];
             const vehicles = Array.isArray(accidentSettings.vehicles) ? accidentSettings.vehicles : [];
             const markers = Array.isArray(accidentSettings.markers) ? accidentSettings.markers : [];
@@ -769,7 +924,7 @@ const accidentSceneRuntime = {
         scene.add(dirLight);
 
         // 2. 动态生成地面和车道线
-        // 灰色路面始终与道路线平行（绕 Y 轴对齐道路方向），不再使用世界轴对齐的场景包围盒。
+        // 灰色路面与世界轴对齐；道路线已在导出时转到同一坐标系，因此互相平行或垂直。
         const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
         const lineExtMat = lineMat;
 
@@ -816,9 +971,40 @@ const accidentSceneRuntime = {
         }
 
         function buildRoadAlignedGround() {
+            const scale = accidentSettings.scale || {};
+            const groundWidth = Number(scale.groundWidthMeters);
+            const groundDepth = Number(scale.groundDepthMeters);
+            const groundCenterX = Number.isFinite(Number(scale.groundCenterX))
+                ? Number(scale.groundCenterX) : 0;
+            const groundCenterZ = Number.isFinite(Number(scale.groundCenterZ))
+                ? Number(scale.groundCenterZ) : 0;
+            const cropWidth = Number(scale.canvasWidthMeters);
+            const cropDepth = Number(scale.canvasHeightMeters);
+            const legacySize = Number(scale.canvasSizeMeters);
+            const canvasWidth = (Number.isFinite(cropWidth) && cropWidth > 0) ? cropWidth : legacySize;
+            const canvasDepth = (Number.isFinite(cropDepth) && cropDepth > 0) ? cropDepth : legacySize;
+            const useGroundRect = Number.isFinite(groundWidth) && groundWidth > 0
+                && Number.isFinite(groundDepth) && groundDepth > 0;
+            const useCanvasCrop = Number.isFinite(canvasWidth) && canvasWidth > 0
+                && Number.isFinite(canvasDepth) && canvasDepth > 0;
             const roads = Array.isArray(accidentSettings.roads) ? accidentSettings.roads : [];
             const vehicles = Array.isArray(accidentSettings.vehicles) ? accidentSettings.vehicles : [];
             const markers = Array.isArray(accidentSettings.markers) ? accidentSettings.markers : [];
+
+            if (useGroundRect || useCanvasCrop) {
+                const planeWidth = useGroundRect ? groundWidth : (canvasWidth + 10);
+                const planeDepth = useGroundRect ? groundDepth : (canvasDepth + 20);
+                const planeX = useGroundRect ? groundCenterX : 0;
+                const planeZ = useGroundRect ? groundCenterZ : 0;
+                const groundGeometry = new THREE.PlaneGeometry(planeWidth, planeDepth);
+                const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x999999 });
+                const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+                ground.rotation.x = -Math.PI / 2;
+                ground.position.set(planeX, 0, planeZ);
+                ground.receiveShadow = true;
+                scene.add(ground);
+                return ground;
+            }
 
             let dirX = 0;
             let dirZ = 0;
@@ -873,7 +1059,10 @@ const accidentSceneRuntime = {
             });
 
             if (points.length === 0) {
-                const groundGeometry = new THREE.PlaneGeometry(sceneBounds.width, sceneBounds.depth);
+                const groundGeometry = new THREE.PlaneGeometry(
+                    sceneBounds.width,
+                    sceneBounds.depth
+                );
                 const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x999999 });
                 const ground = new THREE.Mesh(groundGeometry, groundMaterial);
                 ground.rotation.x = -Math.PI / 2;
@@ -955,10 +1144,10 @@ const accidentSceneRuntime = {
             const tEnd = segment.length / 2;
             const tA = Math.max(tStart, Math.min(tEnd, segment.originalStartT));
             const tB = Math.max(tStart, Math.min(tEnd, segment.originalEndT));
-            const lineStart = segment.center.clone().add(segment.direction.clone().multiplyScalar(tA));
-            const lineEnd = segment.center.clone().add(segment.direction.clone().multiplyScalar(tB));
-            if (tB - tA > 0.001) {
-                snapLines.push({ ax: lineStart.x, az: lineStart.z, bx: lineEnd.x, bz: lineEnd.z });
+            const snapStart = segment.center.clone().add(segment.direction.clone().multiplyScalar(tStart));
+            const snapEnd = segment.center.clone().add(segment.direction.clone().multiplyScalar(tEnd));
+            if (tEnd - tStart > 0.001) {
+                snapLines.push({ ax: snapStart.x, az: snapStart.z, bx: snapEnd.x, bz: snapEnd.z });
             }
             if (road.type === 'solid') {
                 addRoadStripAt(segment, tStart, tA, lineExtMat);
@@ -1342,6 +1531,7 @@ const accidentSceneRuntime = {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
+            if (typeof syncReportModalLayout === 'function') syncReportModalLayout();
         });
 
         // 7. 测量交互逻辑（基准来自建模设置中的车道宽和应急车道宽）
@@ -1356,14 +1546,23 @@ const accidentSceneRuntime = {
         const motionPlayBtn = document.getElementById('motion-play-btn');
         const motionProgress = document.getElementById('motion-progress');
         const motionSpeedBtn = document.getElementById('motion-speed-btn');
-        const measureStatus = document.getElementById('measure-status');
         const orthogonalLockCheckbox = document.getElementById('orthogonal-lock-checkbox');
         const magneticSnapCheckbox = document.getElementById('magnetic-snap-checkbox');
         const vehicleIdCheckbox = document.getElementById('vehicle-id-checkbox');
         const liabilityCard = document.getElementById('liability-card');
         const reportModal = document.getElementById('report-modal');
+        const reportModalCard = document.getElementById('report-modal-card');
         const reportCloseBtn = document.getElementById('report-close-btn');
-        const reportExpertList = document.getElementById('report-expert-list');
+        const reportAvatar = document.getElementById('report-avatar');
+        const reportAvatarFallback = document.getElementById('report-avatar-fallback');
+        const reportCitePlaybook = document.getElementById('report-cite-playbook');
+        const reportCiteMemory = document.getElementById('report-cite-memory');
+        const reportCiteCases = document.getElementById('report-cite-cases');
+        const reportExpertName = document.getElementById('report-expert-name');
+        const reportSpeechWrap = document.getElementById('report-speech-wrap');
+        const reportSpeech = document.getElementById('report-speech');
+        const reportPrevBtn = document.getElementById('report-prev-btn');
+        const reportNextBtn = document.getElementById('report-next-btn');
         const runtimeConfig = typeof accidentSceneRuntime === 'object' && accidentSceneRuntime ? accidentSceneRuntime : {};
         const DEFAULT_SAVE_MEASUREMENTS_URL = 'http://127.0.0.1:8765/save-measurements';
         const SERVICE_REQUIRED_MESSAGE = '请先启动 Python 程序，再编辑或保存测量线。';
@@ -1388,6 +1587,9 @@ const accidentSceneRuntime = {
         const measurePickables = [];
         let activeSaveMeasurementsUrl = '';
         let liabilityMode = false;
+        let reportMode = false;
+        let reportPages = [];
+        let reportExpertIndex = 0;
         let saveInProgress = false;
         const liabilityAvailable = !!(runtimeConfig.liabilityAvailable && runtimeConfig.liabilityAnalysis);
         const playbackSpeedFactor = Math.min(
@@ -1395,32 +1597,19 @@ const accidentSceneRuntime = {
             Math.max(0.02, Number(runtimeConfig.playbackSpeedFactor) || 0.1)
         );
 
-        function getKnowledgeCitationLine() {
-            const analysis = runtimeConfig.liabilityAnalysis || {};
-            return analysis.knowledgeReferenced ? '依据：已引用知识库' : '依据：未引用知识库';
-        }
-
-        function withKnowledgeCitation(text) {
-            const body = String(text == null ? '' : text).replace(/\s+$/, '');
-            return `${body}\n\n${getKnowledgeCitationLine()}`;
-        }
-
         function formatLiabilityText(vehicleEntity) {
             const liability = vehicleEntity && vehicleEntity.liability;
-            let body = '';
             if (!liability) {
-                body = `${vehicleEntity.vehicleId || '未编号车辆'}\n暂无责任信息`;
-            } else {
-                body = [
-                    `${vehicleEntity.vehicleId || '未编号车辆'}`,
-                    `责任: ${liability.responsibility || '未提供'}`,
-                    '',
-                    `原因: ${liability.reason || '未提供'}`,
-                    '',
-                    `事故角色: ${liability.accidentRole || '未提供'}`
-                ].join('\n');
+                return `${vehicleEntity.vehicleId || '未编号车辆'}\n暂无责任信息`;
             }
-            return withKnowledgeCitation(body);
+            return [
+                `${vehicleEntity.vehicleId || '未编号车辆'}`,
+                `责任: ${liability.responsibility || '未提供'}`,
+                '',
+                `原因: ${liability.reason || '未提供'}`,
+                '',
+                `事故角色: ${liability.accidentRole || '未提供'}`
+            ].join('\n');
         }
 
         function setLiabilityCardVisible(visible) {
@@ -1518,6 +1707,12 @@ const accidentSceneRuntime = {
         }
 
         function setHoveredVehicleEntity(vehicleEntity, clientX = 0, clientY = 0) {
+            if (reportMode) {
+                hoveredVehicleEntity = null;
+                clearHoveredVehicleOutline();
+                setLiabilityCardVisible(false);
+                return;
+            }
             hoveredVehicleEntity = vehicleEntity;
             updateHoveredVehicleOutline(vehicleEntity);
             if (!vehicleEntity) {
@@ -1539,11 +1734,11 @@ const accidentSceneRuntime = {
 
         function setLiabilityMode(nextMode) {
             if (!liabilityAvailable) return;
+            if (reportMode) return;
             if (nextMode && motionMode) setMotionMode(false);
             liabilityMode = !!nextMode;
             liabilityBtn.textContent = liabilityMode ? '退出责任' : '责任显示';
             liabilityBtn.style.backgroundColor = liabilityMode ? '#8e1f1b' : '#d94841';
-            setLiabilityBadgesVisible(liabilityMode);
             if (!liabilityMode) {
                 setHoveredVehicleEntity(null);
                 setMeasureStatus('已退出责任显示模式。');
@@ -1558,49 +1753,75 @@ const accidentSceneRuntime = {
             return introState === 'building' || introState === 'settling' || introState === 'waiting';
         }
 
-        function updateVehicleIdBadgesVisible() {
+        function updateRoofBadgesVisible() {
+            const introBusy = introBlocksUi();
             const checkbox = vehicleIdCheckbox || document.getElementById('vehicle-id-checkbox');
-            const show = !!(
-                checkbox
-                && checkbox.checked
-                && !liabilityMode
-                && !measureMode
-                && !motionMode
-                && !introBlocksUi()
+            const showIds = !!(
+                !introBusy && (
+                    reportMode || (
+                        checkbox
+                        && checkbox.checked
+                        && !liabilityMode
+                        && !measureMode
+                        && !motionMode
+                    )
+                )
+            );
+            const showLiability = !!(
+                !introBusy && (reportMode || (liabilityMode && !motionMode))
             );
             vehicleEntities.forEach(vehicleEntity => {
                 if (vehicleEntity.vehicleIdBadge) {
-                    vehicleEntity.vehicleIdBadge.visible = show;
+                    vehicleEntity.vehicleIdBadge.visible = showIds;
+                }
+                if (vehicleEntity.liabilityBadge) {
+                    vehicleEntity.liabilityBadge.visible = showLiability;
                 }
             });
         }
 
+        function updateVehicleIdBadgesVisible() {
+            updateRoofBadgesVisible();
+        }
+
+        function setRightToggleDisabled(checkbox, disabled) {
+            if (!checkbox) return;
+            checkbox.disabled = !!disabled;
+            const label = checkbox.closest('label');
+            if (label) label.classList.toggle('is-disabled', !!disabled);
+        }
+
         function updateToolbarButtonsState() {
             const introBusy = introBlocksUi();
-            const blockBusiness = introBusy || motionMode;
-            if (measureBtn) measureBtn.disabled = blockBusiness || liabilityMode;
+            const lockRightTools = introBusy || motionMode || reportMode || liabilityMode;
+            if (measureBtn) measureBtn.disabled = lockRightTools;
             if (deleteMeasureBtn) {
-                deleteMeasureBtn.disabled = blockBusiness || liabilityMode || selectedMeasurementId === null;
+                deleteMeasureBtn.disabled = lockRightTools || selectedMeasurementId === null;
             }
-            if (resetViewBtn) resetViewBtn.disabled = blockBusiness || liabilityMode;
+            if (resetViewBtn) resetViewBtn.disabled = introBusy || motionMode || liabilityMode;
             if (saveMeasureBtn) {
-                saveMeasureBtn.disabled = blockBusiness || liabilityMode || saveInProgress;
+                saveMeasureBtn.disabled = lockRightTools || saveInProgress;
             }
             if (reportBtn) {
-                reportBtn.disabled = introBusy || !liabilityAvailable || liabilityMode || motionMode || measureMode;
+                reportBtn.disabled = introBusy || !liabilityAvailable || motionMode || liabilityMode;
+                reportBtn.style.backgroundColor = reportMode ? '#5b2fb0' : '#7b4ce2';
+                reportBtn.style.zIndex = reportMode ? '330' : '';
             }
             if (liabilityBtn) {
-                liabilityBtn.disabled = introBusy || !liabilityAvailable || measureMode || motionMode;
+                liabilityBtn.disabled = introBusy || !liabilityAvailable || measureMode || motionMode || reportMode;
             }
             if (motionBtn) {
-                motionBtn.disabled = introBusy || !motionAvailable || liabilityMode || measureMode;
+                motionBtn.disabled = introBusy || !motionAvailable || liabilityMode || measureMode || reportMode;
             }
             if (motionBar) {
-                const showBar = motionMode && !introBusy;
+                const showBar = motionMode && !introBusy && !reportMode;
                 motionBar.classList.toggle('is-visible', showBar);
                 motionBar.setAttribute('aria-hidden', showBar ? 'false' : 'true');
             }
-            updateVehicleIdBadgesVisible();
+            setRightToggleDisabled(magneticSnapCheckbox, lockRightTools);
+            setRightToggleDisabled(orthogonalLockCheckbox, lockRightTools);
+            setRightToggleDisabled(vehicleIdCheckbox, lockRightTools);
+            updateRoofBadgesVisible();
         }
 
         function updateLiabilityButtonsState() {
@@ -1993,11 +2214,9 @@ const accidentSceneRuntime = {
             const want = !!nextMode;
             if (want === motionMode) return;
             if (want) {
-                if (!motionAvailable || introBlocksUi()) return;
-                if (liabilityMode) setLiabilityMode(false);
+                if (!motionAvailable || introBlocksUi() || reportMode || liabilityMode) return;
                 if (measureMode) exitMeasureMode();
                 measureLayer.visible = false;
-                setLiabilityBadgesVisible(false);
                 setHoveredVehicleEntity(null);
                 motionMode = true;
                 motionPlaying = false;
@@ -2087,7 +2306,7 @@ const accidentSceneRuntime = {
 
         if (motionBtn) {
             motionBtn.addEventListener('click', () => {
-                if (introBlocksUi()) return;
+                if (introBlocksUi() || liabilityMode || reportMode) return;
                 setMotionMode(!motionMode);
             });
         }
@@ -2147,8 +2366,28 @@ const accidentSceneRuntime = {
                 .replace(/'/g, '&#39;');
         }
 
-        function openReportModal() {
-            if (!liabilityAvailable) return;
+        function setCiteChip(el, on) {
+            if (!el) return;
+            el.classList.toggle('is-on', !!on);
+            el.classList.toggle('is-off', !on);
+        }
+
+        function setReportAvatar(src) {
+            const url = String(src || '').trim();
+            if (reportAvatar && url) {
+                reportAvatar.src = url;
+                reportAvatar.style.display = 'block';
+                if (reportAvatarFallback) reportAvatarFallback.style.display = 'none';
+                return;
+            }
+            if (reportAvatar) {
+                reportAvatar.removeAttribute('src');
+                reportAvatar.style.display = 'none';
+            }
+            if (reportAvatarFallback) reportAvatarFallback.style.display = 'flex';
+        }
+
+        function collectReportPages() {
             const analysis = runtimeConfig.liabilityAnalysis || {};
             const response = analysis.response || {};
             const experts = Array.isArray(analysis.experts) ? analysis.experts : [];
@@ -2160,53 +2399,113 @@ const accidentSceneRuntime = {
                 if (item.expertId) speechById[String(item.expertId)] = item;
                 if (item.expertName) speechByName[String(item.expertName)] = item;
             });
-            const cards = [];
+            const citationSources = (analysis.citationSources && typeof analysis.citationSources === 'object')
+                ? analysis.citationSources
+                : null;
+            const playbookOn = citationSources
+                ? !!citationSources.playbook
+                : !!analysis.knowledgeReferenced;
+            const casesOn = citationSources
+                ? !!citationSources.cases
+                : !!analysis.knowledgeReferenced;
+            const pages = [];
             if (experts.length > 0) {
                 experts.forEach((expert) => {
                     const speechItem = speechById[String(expert.id || '')]
                         || speechByName[String(expert.name || '')]
                         || {};
-                    const speech = withKnowledgeCitation(
-                        String(speechItem.speech || '').trim() || '暂无发言'
-                    );
-                    const avatar = String(expert.avatarDataUrl || '').trim();
-                    const avatarHtml = avatar
-                        ? `<img class="report-expert-avatar" src="${escapeHtml(avatar)}" alt="">`
-                        : `<div class="report-expert-avatar" style="display:flex;align-items:center;justify-content:center;font-size:28px;color:#777;">?</div>`;
-                    cards.push([
-                        '<div class="report-expert-card">',
-                        avatarHtml,
-                        '<div>',
-                        `<div class="report-expert-name">${escapeHtml(expert.name || '专家')}</div>`,
-                        `<pre class="report-expert-speech">${escapeHtml(speech)}</pre>`,
-                        '</div>',
-                        '</div>'
-                    ].join(''));
+                    pages.push({
+                        name: String(expert.name || '专家'),
+                        avatar: String(expert.avatarDataUrl || '').trim(),
+                        speech: String(speechItem.speech || '').trim() || '暂无发言',
+                        playbook: playbookOn,
+                        memory: !!String(expert.rolePrompt || '').trim(),
+                        cases: casesOn
+                    });
                 });
             } else if (speeches.length > 0) {
                 speeches.forEach((item) => {
-                    cards.push([
-                        '<div class="report-expert-card">',
-                        '<div class="report-expert-avatar" style="display:flex;align-items:center;justify-content:center;font-size:28px;color:#777;">?</div>',
-                        '<div>',
-                        `<div class="report-expert-name">${escapeHtml(item.expertName || item.expertId || '专家')}</div>`,
-                        `<pre class="report-expert-speech">${escapeHtml(withKnowledgeCitation(item.speech || '暂无发言'))}</pre>`,
-                        '</div>',
-                        '</div>'
-                    ].join(''));
+                    pages.push({
+                        name: String(item.expertName || item.expertId || '专家'),
+                        avatar: '',
+                        speech: String(item.speech || '').trim() || '暂无发言',
+                        playbook: playbookOn,
+                        memory: false,
+                        cases: casesOn
+                    });
                 });
             }
-            if (!reportExpertList) return;
-            reportExpertList.innerHTML = cards.length > 0
-                ? cards.join('')
-                : '<div class="report-expert-empty">暂无专家发言。请确认已启用 AI 分析并重新生成报告。</div>';
+            return pages;
+        }
+
+        function syncReportModalLayout() {
+            if (!reportModalCard || !liabilityBtn) return;
+            const top = liabilityBtn.getBoundingClientRect().top;
+            const bottomGap = 12;
+            const height = Math.max(132, Math.round(window.innerHeight - top - bottomGap));
+            reportModalCard.style.height = `${height}px`;
+        }
+
+        function renderReportPage() {
+            const total = reportPages.length;
+            const hasPage = total > 0;
+            const index = hasPage ? Math.max(0, Math.min(reportExpertIndex, total - 1)) : 0;
+            reportExpertIndex = index;
+            const page = hasPage ? reportPages[index] : null;
+            if (reportExpertName) {
+                reportExpertName.textContent = page ? page.name : '事故报告';
+            }
+            if (reportSpeech) {
+                reportSpeech.textContent = page
+                    ? page.speech
+                    : '暂无专家发言。请确认已启用 AI 分析并重新生成报告。';
+            }
+            if (reportSpeechWrap) reportSpeechWrap.scrollTop = 0;
+            setReportAvatar(page ? page.avatar : '');
+            setCiteChip(reportCitePlaybook, !!(page && page.playbook));
+            setCiteChip(reportCiteMemory, !!(page && page.memory));
+            setCiteChip(reportCiteCases, !!(page && page.cases));
+            if (reportPrevBtn) reportPrevBtn.disabled = !hasPage || index <= 0;
+            if (reportNextBtn) reportNextBtn.disabled = !hasPage || index >= total - 1;
+        }
+
+        function openReportModal() {
+            if (!liabilityAvailable || introBlocksUi() || motionMode || liabilityMode) return;
+            if (measureMode) exitMeasureMode();
+            if (motionMode) setMotionMode(false);
+            reportPages = collectReportPages();
+            reportExpertIndex = 0;
+            reportMode = true;
+            if (controls) controls.enabled = true;
+            if (renderer && renderer.domElement) renderer.domElement.style.cursor = 'default';
+            setHoveredVehicleEntity(null);
+            syncReportModalLayout();
+            renderReportPage();
             reportModal.classList.add('is-visible');
             reportModal.setAttribute('aria-hidden', 'false');
+            setMeasureStatus('事故报告模式：可拖动3D视角对照车辆编号与责任；再点「事故报告」或右上角关闭。测绘、保存与播放运动已暂时禁用。');
+            updateToolbarButtonsState();
         }
 
         function closeReportModal() {
+            if (!reportMode) return;
+            reportMode = false;
             reportModal.classList.remove('is-visible');
             reportModal.setAttribute('aria-hidden', 'true');
+            if (liabilityMode) {
+                setMeasureStatus('责任显示已开启：鼠标悬停车辆可查看该车责任信息。');
+            } else {
+                setMeasureStatus('已退出事故报告。');
+            }
+            updateToolbarButtonsState();
+        }
+
+        function stepReportExpert(delta) {
+            if (!reportMode || !reportPages.length) return;
+            const next = reportExpertIndex + delta;
+            if (next < 0 || next >= reportPages.length) return;
+            reportExpertIndex = next;
+            renderReportPage();
         }
 
         function getSaveServiceUrls() {
@@ -2317,7 +2616,7 @@ const accidentSceneRuntime = {
                     };
                 }
             }
-            return best;
+            return best || { x: 0, z: 1 };
         }
 
         function getOrthogonalConstraint(start, rawEnd) {
@@ -2444,8 +2743,8 @@ const accidentSceneRuntime = {
         }
 
         measureBtn.addEventListener('click', async () => {
+            if (reportMode || liabilityMode) return;
             if (motionMode) setMotionMode(false);
-            if (liabilityMode) setLiabilityMode(false);
             if (!measureMode && !(await ensureSaveServiceAvailable())) return;
             measureMode = !measureMode;
             if (measureMode) {
@@ -2463,6 +2762,7 @@ const accidentSceneRuntime = {
         });
 
         deleteMeasureBtn.addEventListener('click', async () => {
+            if (liabilityMode || reportMode || motionMode) return;
             if (selectedMeasurementId !== null) {
                 if (!(await ensureSaveServiceAvailable())) return;
                 deleteMeasurement(selectedMeasurementId);
@@ -2476,13 +2776,35 @@ const accidentSceneRuntime = {
                 updateVehicleIdBadgesVisible();
             });
         }
-        reportBtn.addEventListener('click', openReportModal);
-        reportCloseBtn.addEventListener('click', closeReportModal);
-        reportModal.addEventListener('click', (event) => {
-            if (event.target === reportModal) closeReportModal();
+        reportBtn.addEventListener('click', () => {
+            if (reportMode) closeReportModal();
+            else if (!liabilityMode) openReportModal();
         });
+        reportCloseBtn.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            closeReportModal();
+        });
+        if (reportPrevBtn) {
+            reportPrevBtn.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                stepReportExpert(-1);
+            });
+        }
+        if (reportNextBtn) {
+            reportNextBtn.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                stepReportExpert(1);
+            });
+        }
+        if (reportAvatar) {
+            reportAvatar.addEventListener('error', () => setReportAvatar(''));
+        }
 
         resetViewBtn.addEventListener('click', () => {
+            if (liabilityMode || motionMode) return;
             activePanKeys.clear();
             camera.position.copy(initialCameraPosition);
             controls.target.copy(initialControlsTarget);
@@ -2491,8 +2813,7 @@ const accidentSceneRuntime = {
             setMeasureStatus('视角已复位到初始位置。');
         });
 
-        function setMeasureStatus(text) {
-            measureStatus.textContent = text;
+        function setMeasureStatus(_text) {
         }
 
         function getPreviewStatusText() {
@@ -2853,6 +3174,7 @@ const accidentSceneRuntime = {
         }
 
         async function saveMeasurements() {
+            if (liabilityMode || reportMode || motionMode) return;
             if (!(await ensureSaveServiceAvailable())) return;
             if (!runtimeConfig.sourceHtmlPath) {
                 alert('当前 HTML 缺少源文件路径，无法保存测量线。请重新从 Python 程序生成页面。');
@@ -2920,6 +3242,7 @@ const accidentSceneRuntime = {
                 setMeasureStatus(getPreviewStatusText());
                 return;
             }
+            if (reportMode) return;
             if (!liabilityMode || event.target !== renderer.domElement) return;
             const vehicleEntity = vehicleEntityFromPointer(event);
             setHoveredVehicleEntity(vehicleEntity, event.clientX, event.clientY);
@@ -2929,6 +3252,7 @@ const accidentSceneRuntime = {
             if (event.target !== renderer.domElement) return;
             renderer.domElement.focus();
             if (!measureMode) {
+                if (reportMode) return;
                 if (liabilityMode) {
                     if (event.button === 0) setHoveredVehicleEntity(vehicleEntityFromPointer(event), event.clientX, event.clientY);
                     return;
@@ -2974,12 +3298,12 @@ const accidentSceneRuntime = {
             }
         });
         renderer.domElement.addEventListener('pointerleave', () => {
-            if (liabilityMode) setHoveredVehicleEntity(null);
+            if (liabilityMode && !reportMode) setHoveredVehicleEntity(null);
         });
         window.addEventListener('keydown', event => {
             if (event.key === 'Escape') {
+                if (reportMode) return;
                 if (liabilityMode) setLiabilityMode(false);
-                if (reportModal.classList.contains('is-visible')) closeReportModal();
             }
         });
 
