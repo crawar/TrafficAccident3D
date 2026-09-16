@@ -13,6 +13,10 @@ release/
 
 # Local secrets: never commit the real API key
 config/ai_settings.json
+config/column_mapping.json
+
+# Offline judgment-analysis Word output
+outputword/
 
 # Generated / case data (accident reports, annotations)
 history/*
@@ -32,6 +36,10 @@ knowledge/packs/
 downloads/*.pt
 downloads/*.onnx
 downloads/*.engine
+
+# Chinese NER weights for offline desensitize
+downloads/chinese_ner/**
+!downloads/chinese_ner/.gitkeep
 
 # Editor / OS
 .cursor/

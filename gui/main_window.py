@@ -8,12 +8,15 @@ import os
 
 from core.yolo_detector import YoloDetector
 from gui.app_styles import HISTORY_BTN_STYLE, PRIMARY_BTN_STYLE, PRIMARY_CONTROL_H
+from gui.case_review_dialog import CaseReviewDialog
 from gui.example_dialog import ExampleDialog
 from gui.result_window import ResultWindow
 from gui.knowledge_settings_dialog import KnowledgeSettingsDialog
+from gui.offline_desensitize_dialog import OfflineDesensitizeDialog
 from gui.system_settings_dialog import SystemSettingsDialog
 from gui.vehicle_preview_dialog import open_vehicle_preview
-from utils.ai_settings import load_ai_settings
+from judgment_analysis.dialog import JudgmentAnalysisDialog
+from utils.ai_settings import ai_enabled, load_ai_settings
 from utils.app_paths import app_path
 from utils.annotation_history import load_annotation
 from utils.measurement_port_settings import rewrite_html_save_measurements_url
@@ -165,7 +168,7 @@ class MainWindow(QMainWindow):
         action_label.setObjectName("sectionLabel")
         action_layout.addWidget(action_label)
 
-        self.upload_btn = QPushButton("上传图片")
+        self.upload_btn = QPushButton("事故研讨")
         self.upload_btn.setStyleSheet(PRIMARY_BTN_STYLE)
         self.upload_btn.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
@@ -175,7 +178,7 @@ class MainWindow(QMainWindow):
         self.upload_btn.clicked.connect(self.on_upload)
         action_layout.addWidget(self.upload_btn)
 
-        self.history_btn = QPushButton("查看历史")
+        self.history_btn = QPushButton("历史卷宗")
         self.history_btn.setStyleSheet(HISTORY_BTN_STYLE)
         self.history_btn.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
@@ -184,6 +187,43 @@ class MainWindow(QMainWindow):
         self.history_btn.setCursor(Qt.PointingHandCursor)
         self.history_btn.clicked.connect(self.on_view_history)
         action_layout.addWidget(self.history_btn)
+
+        self.review_btn = QPushButton("事故复核")
+        self.review_btn.setStyleSheet(HISTORY_BTN_STYLE)
+        self.review_btn.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
+        self.review_btn.setMinimumHeight(PRIMARY_CONTROL_H)
+        self.review_btn.setCursor(Qt.PointingHandCursor)
+        self.review_btn.setToolTip(
+            "上传事故决定书或调查报告 Word，由纪律审查角色做对抗性复核。"
+        )
+        self.review_btn.clicked.connect(self.on_case_review)
+        action_layout.addWidget(self.review_btn)
+
+        self.analyze_btn = QPushButton("研判分析")
+        self.analyze_btn.setStyleSheet(HISTORY_BTN_STYLE)
+        self.analyze_btn.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
+        self.analyze_btn.setMinimumHeight(PRIMARY_CONTROL_H)
+        self.analyze_btn.setCursor(Qt.PointingHandCursor)
+        self.analyze_btn.setToolTip(
+            "上传事故台账 Excel，离线生成 Word 事故分析报告，不调用 AI。"
+        )
+        self.analyze_btn.clicked.connect(self.on_judgment_analysis)
+        action_layout.addWidget(self.analyze_btn)
+
+        self.desensitize_btn = QPushButton("离线脱敏")
+        self.desensitize_btn.setStyleSheet(HISTORY_BTN_STYLE)
+        self.desensitize_btn.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
+        self.desensitize_btn.setMinimumHeight(PRIMARY_CONTROL_H)
+        self.desensitize_btn.setCursor(Qt.PointingHandCursor)
+        self.desensitize_btn.setToolTip("将 Excel 或 Word 转为带 * 号的脱敏副本，全程离线。")
+        self.desensitize_btn.clicked.connect(self.open_offline_desensitize)
+        action_layout.addWidget(self.desensitize_btn)
 
         self.progress_slot = QWidget()
         self.progress_slot.setFixedHeight(40)
@@ -317,6 +357,9 @@ class MainWindow(QMainWindow):
         ok = self._models_available()
         self.upload_btn.setEnabled(ok)
         self.history_btn.setEnabled(True)
+        self.review_btn.setEnabled(True)
+        self.analyze_btn.setEnabled(True)
+        self.desensitize_btn.setEnabled(True)
 
     def refresh_port_warning(self):
         self.port_warning_label.setVisible(bool(is_configured_port_busy()))
@@ -378,6 +421,37 @@ class MainWindow(QMainWindow):
 
         QDesktopServices.openUrl(QUrl.fromLocalFile(os.path.abspath(file_name)))
 
+    def on_case_review(self):
+        if not ai_enabled(self.ai_settings):
+            QMessageBox.warning(
+                self,
+                "无法复核",
+                "请先在系统设置中勾选「启用AI」，并填写 API 密钥、请求地址和模型。",
+            )
+            return
+        self.upload_btn.setEnabled(False)
+        self.history_btn.setEnabled(False)
+        self.review_btn.setEnabled(False)
+        self.analyze_btn.setEnabled(False)
+        self.desensitize_btn.setEnabled(False)
+        try:
+            dialog = CaseReviewDialog(self.ai_settings, self)
+            dialog.exec()
+        finally:
+            self._restore_main_actions_enabled()
+
+    def on_judgment_analysis(self):
+        self.upload_btn.setEnabled(False)
+        self.history_btn.setEnabled(False)
+        self.review_btn.setEnabled(False)
+        self.analyze_btn.setEnabled(False)
+        self.desensitize_btn.setEnabled(False)
+        try:
+            dialog = JudgmentAnalysisDialog(self)
+            dialog.exec()
+        finally:
+            self._restore_main_actions_enabled()
+
     def on_start_recognize(self):
         if not self.current_image_path or not self._models_available():
             return
@@ -408,6 +482,9 @@ class MainWindow(QMainWindow):
         self.progress_widget.show()
         self.upload_btn.setEnabled(False)
         self.history_btn.setEnabled(False)
+        self.review_btn.setEnabled(False)
+        self.analyze_btn.setEnabled(False)
+        self.desensitize_btn.setEnabled(False)
 
         self.thread = ProcessThread(self.current_image_path, model_path)
         self.thread.finished.connect(self.on_process_finished)
@@ -430,6 +507,10 @@ class MainWindow(QMainWindow):
         self.progress_widget.hide()
         self._restore_main_actions_enabled()
         QMessageBox.critical(self, "错误", f"图像处理失败: {err_msg}")
+
+    def open_offline_desensitize(self):
+        dialog = OfflineDesensitizeDialog(self)
+        dialog.exec()
 
     def open_system_settings(self):
         dialog = SystemSettingsDialog(self)

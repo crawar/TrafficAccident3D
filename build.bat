@@ -89,6 +89,10 @@ if not exist "%PROJECT_DIR%downloads" (
     echo [ERROR] downloads folder not found.
     goto :fail
 )
+if not exist "%PROJECT_DIR%downloads\chinese_ner\config.json" (
+    echo [WARN] Chinese NER weights not found in downloads\chinese_ner.
+    echo [WARN] Put NER files into downloads\chinese_ner. See README for download URLs.
+)
 set "MODEL_COUNT=0"
 for %%F in ("%PROJECT_DIR%downloads\*.pt") do (
     if exist "%%~fF" set /a MODEL_COUNT+=1
@@ -166,6 +170,16 @@ python -m PyInstaller ^
     --collect-all PIL ^
     --collect-all torch ^
     --collect-all torchvision ^
+    --collect-all transformers ^
+    --collect-all tokenizers ^
+    --hidden-import openpyxl ^
+    --hidden-import docx ^
+    --hidden-import xlrd ^
+    --hidden-import xlwt ^
+    --hidden-import pandas ^
+    --hidden-import matplotlib ^
+    --hidden-import matplotlib.backends.backend_agg ^
+    --hidden-import judgment_analysis ^
     --hidden-import PySide6.QtWebEngineCore ^
     --hidden-import PySide6.QtWebEngineWidgets ^
     --hidden-import matplotlib.backends.backend_qtagg ^

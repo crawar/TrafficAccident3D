@@ -9,6 +9,7 @@
 - **运动路径**：为车辆设置行驶路径和速度，生成后可在三维场景中播放。
 - **三维现场**：导出离线 HTML，支持测量距离、车辆编号、责任显示、事故报告。
 - **AI 分析（可选）**：配置 DeepSeek 密钥后，可按交警专家角色生成责任分析与报告发言。仓库和安装包会带上已精炼的口径手册与案件结果；不包含 API 密钥。
+- **研判分析**：主页上传事故台账 Excel，按列映射离线汇总成 Word「事故分析报告」，不调用 AI。
 
 ## 使用方法
 
@@ -18,20 +19,44 @@
 
 在项目根目录双击 `create.bat`，会在本项目内创建 `env` 并安装依赖。完成后双击 `start.bat` 启动。
 
-### 2. YOLO 权重
+### 2. 权重文件（需手动下载）
 
-权重文件超过 GitHub 100MB 限制，仓库不包含。请自行将以下文件放到 `downloads/` 目录：
+仓库不包含权重。请用浏览器下载后，按下面的目录原样放置（不要改文件名）。
 
-- `yolo11x.pt`
-- `yolo11x-obb.pt`
+**YOLO（车辆识别）** — 放到 `downloads/` 目录：
+
+| 文件 | 下载地址 |
+|------|----------|
+| `yolo11x.pt` | https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11x.pt |
+| `yolo11x-obb.pt` | https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11x-obb.pt |
+
+发布页：https://github.com/ultralytics/assets/releases/tag/v8.3.0
+
+**中文 NER（离线脱敏人名/地址）** — 放到 `downloads/chinese_ner/` 目录：
+
+模型页：https://huggingface.co/uer/roberta-base-finetuned-cluener2020-chinese
+
+需要这 5 个文件（点文件名进入后点 Download）：
+
+| 文件 | 下载地址 |
+|------|----------|
+| `config.json` | https://huggingface.co/uer/roberta-base-finetuned-cluener2020-chinese/resolve/main/config.json |
+| `pytorch_model.bin` | https://huggingface.co/uer/roberta-base-finetuned-cluener2020-chinese/resolve/main/pytorch_model.bin |
+| `vocab.txt` | https://huggingface.co/uer/roberta-base-finetuned-cluener2020-chinese/resolve/main/vocab.txt |
+| `tokenizer_config.json` | https://huggingface.co/uer/roberta-base-finetuned-cluener2020-chinese/resolve/main/tokenizer_config.json |
+| `special_tokens_map.json` | https://huggingface.co/uer/roberta-base-finetuned-cluener2020-chinese/resolve/main/special_tokens_map.json |
+
+不要下载 `tf_model.h5`、`flax_model.msgpack`。只做数字、字母、身份证或手机号脱敏时可以不放 NER 权重。
 
 ### 3. 日常操作
 
-1. 点击 **上传图片**，选择现场航拍图。
+1. 点击 **事故研讨**，选择现场航拍图。
 2. 等待识别完成后，进入 **结果确认与编辑**。
 3. 分别校对 **车辆**、**道路线**（这两项必填），按需要补充标记物、运动路径和案情。
 4. 点击 **识别确认**，生成三维 HTML（保存在 `history/`）。
 5. 用浏览器打开生成的 HTML，可测量、播放运动、查看责任和报告。
+
+主页 **研判分析** 可选择事故台账 Excel（`.xlsx` / `.xls`），映射道路、类型、时间等列后离线生成 Word 报告，与所选 Excel 保存在同一文件夹。不需要 API 密钥。
 
 系统设置里可切换识别模型、配置 AI、专家角色、测量端口和动画速度。
 

@@ -9,12 +9,10 @@ import sys
 
 DEFAULTS = {
     "deepseekApiKey": "",
-    "enableLiabilityAnalysis": False,
-    "regenerateLiabilityEachTime": True,
-    "requestUrl": "https://api.deepseek.com/chat/completions",
+    "enableAI": False,
+    "requestUrl": "https://api.deepseek.com",
     "model": "deepseek-v4-pro",
-    "reasoningEffort": "high",
-    "thinkingMode": "enabled",
+    "thinkingLevel": "high",
     "temperature": 0.1,
     "requestTimeoutSec": 120,
 }
@@ -39,6 +37,22 @@ def main() -> int:
             print(f"[WARN] Failed to read source ai_settings.json: {exc}", file=sys.stderr)
 
     data["deepseekApiKey"] = ""
+    data.pop("enableLiabilityAnalysis", None)
+    data.pop("regenerateLiabilityEachTime", None)
+    level = str(data.get("thinkingLevel") or "").strip().lower()
+    if level not in {"none", "low", "medium", "high"}:
+        thinking_mode = str(data.get("thinkingMode") or "").strip().lower()
+        effort = str(data.get("reasoningEffort") or "").strip().lower()
+        if thinking_mode == "disabled":
+            level = "none"
+        elif effort in {"low", "medium", "high"}:
+            level = effort
+        else:
+            level = "high"
+    data["thinkingLevel"] = level
+    data.pop("reasoningEffort", None)
+    data.pop("thinkingMode", None)
+    data["enableAI"] = bool(data.get("enableAI", False))
     os.makedirs(os.path.dirname(os.path.abspath(dst)) or ".", exist_ok=True)
     with open(dst, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)

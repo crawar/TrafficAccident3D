@@ -36,7 +36,7 @@ from gui.app_styles import (
 )
 from gui.image_viewer import ImageViewer
 from gui.accident_brief_panel import AccidentBriefPanel
-from utils.ai_settings import ai_liability_enabled, ai_request_config
+from utils.ai_settings import ai_enabled
 from utils.annotation_history import save_annotation, annotation_fingerprint
 from utils.html_generator import generate_html
 from utils.liability_ai import build_liability_context, request_liability_analysis
@@ -53,7 +53,7 @@ EDIT_MODE_PAGES = (
     (MOTION_MODE_LABEL, MOTION_MODE_LABEL, False),
     (CASE_BRIEF_MODE_LABEL, CASE_BRIEF_MODE_LABEL, False),
 )
-_AI_DISABLED_TOOLTIP = "请先在系统设置中开启AI分析责任"
+_AI_DISABLED_TOOLTIP = "请先在系统设置中勾选「启用AI」并保存。"
 _PREPARE_STATUS_STEPS = (
     "3D数据计算中……",
     "正在翻找知识库……",
@@ -251,6 +251,8 @@ class ResultWindow(QDialog):
         self.ai_settings = dict(ai_settings or {})
         self.progress_dialog = None
         self.ai_thread = None
+        self._ai_cancelled = False
+        self._ai_request_id = 0
         self._prepare_status_steps = []
         self._prepare_status_index = 0
         self._prepare_status_timer = QTimer(self)
@@ -460,9 +462,7 @@ class ResultWindow(QDialog):
         confirm_layout.addWidget(self.show_all_checkbox)
 
         self.run_ai_checkbox = QCheckBox("本次启用AI分析")
-        system_ai_enabled = bool(
-            self.ai_settings.get("enableLiabilityAnalysis", False)
-        )
+        system_ai_enabled = bool(self.ai_settings.get("enableAI", False))
         self.run_ai_checkbox.setChecked(system_ai_enabled)
         if not system_ai_enabled:
             self.run_ai_checkbox.setChecked(False)
@@ -824,69 +824,15 @@ class ResultWindow(QDialog):
             return
 
         extra = self._persist_fields()
-        current_fingerprint = annotation_fingerprint(
-            final_vehicles,
-            final_lanes,
-            final_markers,
-            extra["accident_brief"],
-            extra["lane_width_settings"],
-        )
-        force_regenerate_ai = bool(
-            self.ai_settings.get("regenerateLiabilityEachTime", True)
-        )
-        current_request_config = ai_request_config(self.ai_settings)
-        cached_ai_analysis = None
-        cached_liability_context = None
-        if self.cached_annotation.get("data_fingerprint") == current_fingerprint:
-            maybe_cached_ai = self.cached_annotation.get("ai_analysis")
-            if (
-                isinstance(maybe_cached_ai, dict)
-                and maybe_cached_ai.get("requestConfig") == current_request_config
-            ):
-                cached_ai_analysis = maybe_cached_ai
-                cached_liability_context = self.cached_annotation.get(
-                    "liability_context"
-                )
-
-        effective_ai_settings = dict(self.ai_settings)
-        effective_ai_settings["enableLiabilityAnalysis"] = True
-        run_ai_this_time = (
-            self.run_ai_checkbox.isChecked()
-            and ai_liability_enabled(effective_ai_settings)
+        run_ai_this_time = self.run_ai_checkbox.isChecked() and ai_enabled(
+            self.ai_settings
         )
 
         if run_ai_this_time:
-            if (
-                (not force_regenerate_ai)
-                and cached_ai_analysis
-                and cached_liability_context
-            ):
-                self._finish_generate(
-                    final_vehicles,
-                    final_lanes,
-                    final_markers,
-                    cached_ai_analysis,
-                    cached_liability_context,
-                    persist_ai_analysis=cached_ai_analysis,
-                    persist_liability_context=cached_liability_context,
-                )
-                return
-            if not force_regenerate_ai:
-                try:
-                    self._finish_generate(
-                        final_vehicles,
-                        final_lanes,
-                        final_markers,
-                        None,
-                        None,
-                        persist_ai_analysis=None,
-                        persist_liability_context=None,
-                    )
-                except Exception as e:
-                    QMessageBox.critical(self, "错误", f"生成或保存失败: {str(e)}")
-                return
-
             self.generate_btn.setEnabled(False)
+            self._ai_cancelled = False
+            self._ai_request_id += 1
+            request_id = self._ai_request_id
             self._open_prepare_status_dialog()
             self.ai_thread = LiabilityAnalysisThread(
                 self.image_path,
@@ -899,20 +845,22 @@ class ResultWindow(QDialog):
                 canvas_crop=extra["canvas_crop"],
             )
             self.ai_thread.finished.connect(
-                lambda ai_analysis, liability_context: self._on_ai_finished(
+                lambda ai_analysis, liability_context, rid=request_id: self._on_ai_finished(
                     final_vehicles,
                     final_lanes,
                     final_markers,
                     ai_analysis,
                     liability_context,
+                    request_id=rid,
                 )
             )
             self.ai_thread.error.connect(
-                lambda err_msg: self._on_ai_error(
+                lambda err_msg, rid=request_id: self._on_ai_error(
                     final_vehicles,
                     final_lanes,
                     final_markers,
                     err_msg,
+                    request_id=rid,
                 )
             )
             self.ai_thread.start()
@@ -925,8 +873,8 @@ class ResultWindow(QDialog):
                 final_markers,
                 None,
                 None,
-                persist_ai_analysis=cached_ai_analysis,
-                persist_liability_context=cached_liability_context,
+                persist_ai_analysis=None,
+                persist_liability_context=None,
             )
         except Exception as e:
             QMessageBox.critical(self, "错误", f"生成或保存失败: {str(e)}")
@@ -937,15 +885,15 @@ class ResultWindow(QDialog):
         self._prepare_status_index = 0
         self.progress_dialog = QProgressDialog(
             self._prepare_status_steps[0],
-            None,
+            "取消",
             0,
             0,
             self,
         )
         self.progress_dialog.setWindowTitle("准备中")
-        self.progress_dialog.setCancelButton(None)
         self.progress_dialog.setWindowModality(Qt.WindowModal)
         self.progress_dialog.setMinimumDuration(0)
+        self.progress_dialog.canceled.connect(self._cancel_ai_analysis)
         self._polish_progress_dialog()
         self.progress_dialog.show()
         if len(self._prepare_status_steps) > 1:
@@ -971,18 +919,41 @@ class ResultWindow(QDialog):
         self._prepare_status_steps = []
         self._prepare_status_index = 0
 
+    def _cancel_ai_analysis(self):
+        if self._ai_cancelled and self.progress_dialog is None:
+            return
+        self._ai_cancelled = True
+        self._ai_request_id += 1
+        thread = self.ai_thread
+        self.ai_thread = None
+        if thread is not None:
+            try:
+                thread.finished.disconnect()
+            except (RuntimeError, TypeError):
+                pass
+            try:
+                thread.error.disconnect()
+            except (RuntimeError, TypeError):
+                pass
+        self._close_progress_dialog()
+
     def _close_progress_dialog(self):
         self._stop_prepare_status()
-        if self.progress_dialog is not None:
-            self.progress_dialog.close()
-            self.progress_dialog.deleteLater()
-            self.progress_dialog = None
+        dialog = self.progress_dialog
+        self.progress_dialog = None
+        if dialog is not None:
+            try:
+                dialog.canceled.disconnect(self._cancel_ai_analysis)
+            except (RuntimeError, TypeError):
+                pass
+            dialog.close()
+            dialog.deleteLater()
         self._refresh_generate_enabled()
 
     def _polish_progress_dialog(self):
         if self.progress_dialog is None:
             return
-        self.progress_dialog.setFixedSize(360, 180)
+        self.progress_dialog.setFixedSize(360, 200)
         self.progress_dialog.setStyleSheet(
             "QProgressDialog QLabel {"
             "font-size: 18px;"
@@ -1013,8 +984,12 @@ class ResultWindow(QDialog):
             progress_bar.setAlignment(Qt.AlignCenter)
 
     def _on_ai_finished(
-        self, final_vehicles, final_lanes, final_markers, ai_analysis, liability_context
+        self, final_vehicles, final_lanes, final_markers, ai_analysis, liability_context,
+        request_id=0,
     ):
+        if self._ai_cancelled or request_id != self._ai_request_id:
+            return
+        self.ai_thread = None
         try:
             self._finish_generate(
                 final_vehicles,
@@ -1030,7 +1005,10 @@ class ResultWindow(QDialog):
         finally:
             self._close_progress_dialog()
 
-    def _on_ai_error(self, final_vehicles, final_lanes, final_markers, err_msg):
+    def _on_ai_error(self, final_vehicles, final_lanes, final_markers, err_msg, request_id=0):
+        if self._ai_cancelled or request_id != self._ai_request_id:
+            return
+        self.ai_thread = None
         self._close_progress_dialog()
         QMessageBox.warning(
             self,
@@ -1109,3 +1087,8 @@ class ResultWindow(QDialog):
             f"已生成并打开: {base}。可继续修改后再次点击「识别确认」。",
             kind="success",
         )
+
+    def closeEvent(self, event):
+        if self.ai_thread is not None and self.ai_thread.isRunning():
+            self._cancel_ai_analysis()
+        super().closeEvent(event)

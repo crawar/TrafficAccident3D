@@ -7,7 +7,7 @@ import json
 import os
 from urllib import error, request
 
-from utils.ai_settings import ai_request_config, load_ai_settings, sanitize_ai_settings
+from utils.ai_settings import ai_enabled, ai_request_config, load_ai_settings, sanitize_ai_settings
 from utils.knowledge_parse import read_accident_excel_rows, rows_to_case_cards
 from utils.knowledge_store import (
     MAX_ACCIDENTS,
@@ -366,6 +366,8 @@ def refine_knowledge_from_excel(
             raise KnowledgeRefineCancelled("已取消知识库精炼。")
 
     settings = ai_settings if isinstance(ai_settings, dict) else load_ai_settings()
+    if not ai_enabled(settings):
+        raise ValueError("未启用 AI，无法精炼知识库。")
     _check_cancel()
     _emit(progress_cb, 2, "正在读取 Excel…")
     rows = read_accident_excel_rows(xlsx_path)

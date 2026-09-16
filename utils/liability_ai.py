@@ -6,7 +6,7 @@ from urllib import request
 import cv2
 
 from utils.ai_experts import experts_for_runtime, load_ai_experts
-from utils.ai_settings import ai_request_config, sanitize_ai_settings
+from utils.ai_settings import ai_enabled, ai_request_config, sanitize_ai_settings
 from utils.data_converter import convert_to_3d_data
 from utils.knowledge_retrieve import build_knowledge_attachment
 from utils.knowledge_store import playbook_is_populated
@@ -517,9 +517,7 @@ def _request_options(ai_settings):
     if request_config["reasoningEffort"]:
         payload_extras["reasoning_effort"] = request_config["reasoningEffort"]
     if request_config["thinkingMode"] in {"enabled", "disabled"}:
-        payload_extras["extra_body"] = {
-            "thinking": {"type": request_config["thinkingMode"]}
-        }
+        payload_extras["thinking"] = {"type": request_config["thinkingMode"]}
     return {
         "apiKey": safe_settings["deepseekApiKey"],
         "requestUrl": request_config["requestUrl"] or DEFAULT_DEEPSEEK_CHAT_URL,
@@ -817,6 +815,8 @@ def request_liability_analysis(ai_settings, liability_context):
     token = str(request_options["apiKey"] or "").strip()
     if not token:
         raise ValueError("未配置 DeepSeek API 密钥。")
+    if not ai_enabled(ai_settings):
+        raise ValueError("未启用 AI，无法进行责任分析。")
     experts_payload = load_ai_experts()
     experts = experts_for_runtime(experts_payload)
     payload = _request_payload(liability_context, ai_settings, experts=experts)

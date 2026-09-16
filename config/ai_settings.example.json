@@ -1,11 +1,9 @@
 {
   "deepseekApiKey": "",
-  "enableLiabilityAnalysis": false,
-  "regenerateLiabilityEachTime": true,
-  "requestUrl": "https://api.deepseek.com/chat/completions",
+  "enableAI": false,
+  "requestUrl": "https://api.deepseek.com",
   "model": "deepseek-v4-pro",
-  "reasoningEffort": "high",
-  "thinkingMode": "enabled",
+  "thinkingLevel": "high",
   "temperature": 0.1,
   "requestTimeoutSec": 120
 }

@@ -19,14 +19,14 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from utils.ai_settings import load_ai_settings
+from gui.desensitize_warning_dialog import DesensitizeWarningDialog
+from utils.ai_settings import ai_enabled, load_ai_settings
 from utils.knowledge_refine import KnowledgeRefineCancelled, refine_knowledge_from_excel
 from utils.knowledge_store import (
     MAX_ACCIDENTS,
     MAX_PACK_NAME,
     delete_pack,
     delete_playbook,
-    has_ai_api_key,
     list_pack_summaries,
     playbook_is_populated,
     playbook_status_text,
@@ -312,17 +312,17 @@ class KnowledgeSettingsDialog(QDialog):
 
     def _refresh_state(self):
         running = self._running()
-        has_key = has_ai_api_key()
-        self.api_warning.setVisible(not has_key)
-        if not has_key:
+        enabled = ai_enabled()
+        self.api_warning.setVisible(not enabled)
+        if not enabled:
             self.api_warning.setText(
-                "尚未配置 AI API 密钥，知识库无法精炼，也不会注入责任分析。"
-                "请先打开「系统设置 → AI连接」，勾选启用并填写 API 密钥后再回来精炼。"
+                "尚未启用 AI 或未填完整连接参数，知识库无法精炼，也不会注入责任分析。"
+                "请先打开「系统设置 → AI连接」，勾选「启用AI」并填写 api_key、base_url、model。"
             )
         self.playbook_label.setText(playbook_status_text())
         self._reload_table()
         self.example_btn.setEnabled(not running)
-        self.refine_btn.setEnabled(has_key and not running)
+        self.refine_btn.setEnabled(enabled and not running)
         self.delete_playbook_btn.setEnabled((not running) and playbook_is_populated())
         self.close_btn.setEnabled(not running)
         if not running and self.progress_bar.value() == 0:
@@ -360,13 +360,16 @@ class KnowledgeSettingsDialog(QDialog):
         self.progress_label.setText("已只读打开示例。请另存为自己的表格后再填写并上传。")
 
     def _on_refine(self):
-        if not has_ai_api_key():
+        if not ai_enabled():
             QMessageBox.warning(
                 self,
                 "无法精炼",
-                "请先在系统设置中配置 AI API 密钥。",
+                "请先在系统设置中勾选「启用AI」，并填写 API 密钥、请求地址和模型。",
             )
             self._refresh_state()
+            return
+        warn = DesensitizeWarningDialog(self)
+        if warn.exec() != DesensitizeWarningDialog.Accepted:
             return
         file_name, _ = QFileDialog.getOpenFileName(
             self,
